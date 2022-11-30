@@ -7,7 +7,7 @@ from setuptools import setup, find_packages
 with open('README.md') as readme_file:
     readme = readme_file.read()
 
-requirements = [ 'pandas', 'pint', 'feelpp', ]
+requirements = [ 'pandas', 'pint', 'tabulate', 'feelpp', 'feelpp-toolboxes', 'feelpp-toolboxes-core', 'feelpp-toolboxes-coefficientformpdes', ]
 
 setup_requirements = [ ]
 
@@ -31,7 +31,7 @@ setup(
     description="Python Magnet Workflows",
     entry_points={
         'console_scripts': [
-            'python_magnetworkflows=workflows.cli:main',
+            'python_magnetworkflows=python_magnetworkflows.cli:main',
         ],
     },
     install_requires=requirements,
@@ -40,7 +40,7 @@ setup(
     include_package_data=True,
     keywords='python__magnetworkflows',
     name='python_magnetworkflows',
-    packages=find_packages(include=['workflows.*']),
+    packages=find_packages(include=['python_magnetworkflows', 'python_magnetworkflows.*']),
     package_data={'': []},
     setup_requires=setup_requirements,
     test_suite='tests',
