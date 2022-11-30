@@ -1,0 +1,19 @@
+[tool]
+[tool.poetry]
+name = "python_magnetworkflows"
+version = "0.1.0"
+description = "Python Magnet Workflows"
+license = "MIT license"
+keywords = ["python__magnetworkflows"]
+classifiers = ["Development Status :: 2 - Pre-Alpha", "Intended Audience :: Developers", "License :: OSI Approved :: MIT License", "Natural Language :: English", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.5", "Programming Language :: Python :: 3.6", "Programming Language :: Python :: 3.7", "Programming Language :: Python :: 3.8"]
+homepage = "https://github.com/Trophime/python_magnetworkflows"
+authors = ["Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>",
+           "Romain Vallet <romain.vallet@lncmi.cnrs.fr>",
+           "Jeremie Muzet <jeremie.muzet@lncmi.cnrs.fr>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+feelpp = "*"
+pandas = "*"
+pint = "*"
