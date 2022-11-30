@@ -1,0 +1,42 @@
+Source: python-magnetworkflows
+Section: python
+Priority: optional
+Maintainer: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
+Build-Depends: debhelper-compat (= 12),
+ dh-python,
+ python3-setuptools,
+ python3-all
+Standards-Version: 4.6.0
+Homepage: https://github.com/Trophime/python_magnetworkflows
+#Vcs-Browser: https://salsa.debian.org/debian/python-magnetworkflows
+#Vcs-Git: https://salsa.debian.org/debian/python-magnetworkflows.git
+#Testsuite: autopkgtest-pkg-python
+Rules-Requires-Root: no
+
+Package: python3-magnetworkflows
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends},
+ python3-pandas,
+ python3-pint,
+ python3-tabulate,
+ python3-feelpp,
+ python3-feelpp-toolboxes,
+ python3-feelpp-toolboxes-core,
+ python3-feelpp-toolboxes-coefficientformpdes,
+ python3-feelpp-toolboxes-coefficientformpdes,
+ python3-feelpp-toolboxes-thermoelectric,
+ python3-feelpp-toolboxes-solid
+Suggests: python-python-magnetworkflows-doc
+Description: Magnet Workflowsmetry Python module (Python 3)
+ This module provides basic simulation workflows
+ .
+ This package installs the library for Python 3.
+
+Package: python-magnetworkflows-doc
+Architecture: all
+Section: doc
+Depends: ${sphinxdoc:Depends}, ${misc:Depends}
+Description: <insert up to 60 chars description> (common documentation)
+ This module provides basic simulation workflows
+ .
+ This package installs the library for Python 3.
