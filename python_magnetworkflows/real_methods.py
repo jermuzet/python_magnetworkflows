@@ -14,7 +14,9 @@ ureg = UnitRegistry()
 ureg.default_system = 'SI'
 ureg.autoconvert_offset_to_baseunit = True
 
+Vpump0 = 1000 # rpm
 Vpmax = 2840 # rpm
+F0_l_per_second = 0 # l/s
 Fmax_l_per_second = 140 # l/s
 Pmax = 22 # bar
 Pmin = 4 # bar
@@ -26,9 +28,11 @@ def flow_params(filename: str):
         print(f"Load flow params from {f.name}")
         flow_params = json.loads(f.read())
 
-    global Vpmax, Fmax_l_per_second, Pmax, Pmin, Imax
+    global Vpump0, Vpmax, Fmax_l_per_second, Pmax, Pmin, Imax
     
+    Vpump0 = flow_params['Vp0']['value'] # rpm
     Vpmax = flow_params['Vpmax']['value'] # rpm
+    F0_l_per_second = flow_params['F0']['value'] # l/s
     Fmax_l_per_second = flow_params['Fmax']['value'] # l/s
     Pmax =  flow_params['Pmax']['value'] # bar
     Pmin =  flow_params['Pmin']['value'] # bar
@@ -74,8 +78,9 @@ def setFlux():
 
 def vpump(objectif: float) -> float:
     Vpump = Vpmax
+    Vpump0 = 1000
     if objectif <= Imax:
-        Vpump = 1000+(Vpmax-1000)*(objectif/Imax)**2
+        Vpump = Vpump0+(Vpmax-Vpump0)*(objectif/Imax)**2
 
     return Vpump
 
@@ -85,8 +90,9 @@ def flow(objectif: float) -> float:
     """
 
     units = [ ureg.liter/ureg.second, ureg.meter*ureg.meter*ureg.meter/ureg.second]
+    F0 = Quantity(F0, units[0]).to(units[1]).magnitude
     Fmax = Quantity(Fmax_l_per_second, units[0]).to(units[1]).magnitude
-    return Fmax * vpump(objectif)/Vpmax
+    return F0 + Fmax * vpump(objectif)/Vpmax
 
 def pressure(objectif: float) -> float:
     """
