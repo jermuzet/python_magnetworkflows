@@ -90,7 +90,7 @@ def flow(objectif: float) -> float:
     """
 
     units = [ ureg.liter/ureg.second, ureg.meter*ureg.meter*ureg.meter/ureg.second]
-    F0 = Quantity(F0, units[0]).to(units[1]).magnitude
+    F0 = Quantity(F0_l_per_second, units[0]).to(units[1]).magnitude
     Fmax = Quantity(Fmax_l_per_second, units[0]).to(units[1]).magnitude
     return F0 + Fmax * vpump(objectif)/Vpmax
 
