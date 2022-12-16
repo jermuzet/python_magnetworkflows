@@ -50,6 +50,12 @@ def main():
     flow_params(args.flow_params)
         
     print("Current:", args.current)
+    currents = []
+    if isinstance(args.current, list):
+        currents = args.current
+    else:
+        currents.append(args.current)
+        
 
     # Load cfg as config
     import configparser
@@ -110,7 +116,7 @@ def main():
     # insert: IH, params N_H\* control_params U_H\* 'Statistics_Intensity_H\w+_integrate'
     # bitter: IB, other U_\*, extract name from U_* to get N_*
     # supra: IS params from I_\*, ............. I_\* to get N_*
-    targets = setTarget('I', params, args.current[0], args.debug)
+    targets = setTarget('I', params, currents[0], args.debug)
     # print("targets:", targets)
     
     # init feelpp env
@@ -120,7 +126,7 @@ def main():
     (params, bcparams) = solve(feelpp_env, feel_pb, args, 'I', params, control_params, bc_params, targets)
     
     # update
-    update(cwd, jsonmodel, params, control_params, bcparams, args.current[0], args.debug)
+    update(cwd, jsonmodel, params, control_params, bcparams, currents[0], args.debug)
 
     # display csv results
     # TODO use units 
@@ -131,7 +137,7 @@ def main():
     # df = getTarget('MeanT', feelpp_env, args.debug)
     # df = getTarget('MaxT', feelpp_env, args.debug)
     if feelpp_env.isMasterRank():
-        print(f"I: {args.current[0]} [A]\tPower: {df.iloc[-1][0]} [W]")
+        print(f"I: {currents[0]} [A]\tPower: {df.iloc[-1][0]} [W]")
         # TODO add bitter current and power if any Bitters
 
     # stats by Helices
