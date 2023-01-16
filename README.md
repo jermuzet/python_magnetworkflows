@@ -20,4 +20,12 @@ singularity exec /home/singularity/feelpp-v0.110.2.sif \
     dpkg -L python3-magnetworkflows
 ```
 
+In devcontainer, you shall mount your data directory to /home/vscode to run singularity container,eg:
+
+```
+singularity exec -B /data/M9_M19020601-cfpdes-thmagel_hcurl-nonlinear-Axi-sim/data/geometries:/home/vscode \
+    /home/singularity/hifimagnet-salome-9.8.3.sif \
+    salome -w1 -t /opt/SALOME-9.8.0-UB20.04/INSTALL/HIFIMAGNET/bin/salome/HIFIMAGNET_Cmd.py args:M9_M19020601.yaml,--axi,--air,4,6
+```
+
 ====
