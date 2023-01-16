@@ -115,6 +115,7 @@ ENV/
 
 # data folder
 data
+feelppdb
 
 log*
 
