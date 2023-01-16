@@ -110,6 +110,9 @@ ENV/
 *.brep
 *~
 
+# debian stuff
+.pc
+
 # data folder
 data
 
