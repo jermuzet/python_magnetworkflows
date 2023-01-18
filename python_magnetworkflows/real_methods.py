@@ -56,6 +56,44 @@ def getPower(df: pd.DataFrame, marker: str):
 def setPower():
     pass
 
+# Stress
+def getMinHoop(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_Stress_{marker}_min"].iloc[-1]
+
+def setMinHoop():
+    pass
+
+def getMeanHoop(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_Stress_{marker}_mean"].iloc[-1]
+
+def setMeanHoop():
+    pass
+
+def getMaxHoop(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_Stress_{marker}_max"].iloc[-1]
+
+def setMaxHoop():
+    pass
+
+def getMinVonMises(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_VonMises_{marker}_min"].iloc[-1]
+
+def setMinVonMises():
+    pass
+
+def getMeanVonMises(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_VonMises_{marker}_mean"].iloc[-1]
+
+def setMeanVonMises():
+    pass
+
+def getMaxVonMises(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_VonMises_{marker}_max"].iloc[-1]
+
+def setMaxVonMises():
+    pass
+
+# Temperature
 def getMeanT(df: pd.DataFrame, marker: str):
     return df[f"Statistics_MeanT_{marker}_mean"].iloc[-1]
 
@@ -66,6 +104,12 @@ def getMaxT(df: pd.DataFrame, marker: str):
     return df[f"Statistics_MaxT_{marker}_max"].iloc[-1]
 
 def setMaxT():
+    pass
+
+def getMinT(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_MaxT_{marker}_min"].iloc[-1]
+
+def setMinT():
     pass
 
 def getFlux(df: pd.DataFrame, marker: str):

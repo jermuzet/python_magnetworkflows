@@ -141,10 +141,10 @@ def solve(e, f: str, args, objectif: str, paramsdict: dict, params: List[str], b
     # Save table (need headers)
     # print(tabulate(table, headers, tablefmt="simple"))
 
-    resfile = args.cfgfile.replace('.cfg', '-I{str(args.current[0])}A.csv')
+    resfile = args.cfgfile.replace('.cfg', f'-I{str(args.current[0])}A.csv')
     if e.isMasterRank(): 
-        print(f"Export result to csv: {os.getcwd() + '/' + resfile}")
-    with open(resfile,"w+") as f:
+        print(f"Export result to csv: {os.getcwd()}/{resfile}")
+    with open(resfile,"w+") as file:
         df = pd.DataFrame(table, columns = headers)
         df.to_csv(resfile, encoding='utf-8')
     

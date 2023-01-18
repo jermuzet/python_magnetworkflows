@@ -1,104 +1,175 @@
 """
 structure of a target:
-name: 'I' 
+name: 'I'
 csv: name of the csv file where name data are recorded
 rematch: regexp to recover name data from csv
-params from parameters section, 
+params from parameters section,
 control_params from parameters section,
 value: name of the method to compute name
- 
 """
+
 from typing import List, Union, Optional
 
 import os
 
-import pandas as pd
 import json
+import pandas as pd
 
-from .real_methods import *
+from .real_methods import update_U, getCurrent, setCurrent
+from .real_methods import getPower, setPower
+from .real_methods import getMinHoop, setMinHoop, getMeanHoop, setMeanHoop, getMaxHoop, setMaxHoop
+from .real_methods import getMinVonMises, setMinVonMises, getMeanVonMises, setMeanVonMises, getMaxVonMises, setMaxVonMises
+from .real_methods import getMinT, setMinT, getMeanT, setMeanT, getMaxT, setMaxT
+from .real_methods import getFlux, setFlux
+from .real_methods import getHeatCoeff, setHeatCoeff
+from .real_methods import getDT, setDT
 
 # TODO create/modify targetdefs on the fly
 
 targetdefs = {
     "I": {
-        "csv": 'heat.measures/values.csv', 
-        "rematch": 'Statistics_Intensity_\w+_integrate', 
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_Intensity_\w+_integrate',
         "params": [('N','N_\w+')],
         "control_params": [('U', 'U_\w+', update_U)],
         "value": (getCurrent, setCurrent),
-        "unit": "Current"
+        "unit": "A"
         },
     "PowerH": {
-        "csv": 'heat.measures/values.csv', 
-        "rematch": 'Statistics_Power_\w+_integrate', 
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_Power_\w+_integrate',
         "params": [],
         "control_params": [],
         "value": (getPower, setPower),
-        "unit": "Power"
+        "unit": "W"
     },
     "Power": {
-        "csv": 'heat.measures/values.csv', 
-        "rematch": 'Statistics_Power_integrate', 
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_Power_integrate',
         "params": [],
         "control_params": [],
         "value": (getPower, setPower),
-        "unit": "Power"
+        "unit": "W"
+    },
+    "MinHoopH": {
+        "csv": 'elastic.measures/values.csv',
+        "rematch": 'Statistics_Stress_\w+_min',
+        "params": [],
+        "control_params": [],
+        "value": (getMinHoop, setMinHoop),
+        "unit": "Pa"
+    },
+    "MinVonMisesH": {
+        "csv": 'elastic.measures/values.csv',
+        "rematch": 'Statistics_VonMises_\w+_min',
+        "params": [],
+        "control_params": [],
+        "value": (getMinVonMises, setMinVonMises),
+        "unit": "Pa"
+    },
+    "MeanHoopH": {
+        "csv": 'elastic.measures/values.csv',
+        "rematch": 'Statistics_Stress_\w+_mean',
+        "params": [],
+        "control_params": [],
+        "value": (getMeanHoop, setMeanHoop),
+        "unit": "Pa"
+    },
+    "MeanVonMisesH": {
+        "csv": 'elastic.measures/values.csv',
+        "rematch": 'Statistics_VonMises_\w+_mean',
+        "params": [],
+        "control_params": [],
+        "value": (getMeanVonMises, setMeanVonMises),
+        "unit": "Pa"
+    },
+    "MaxHoopH": {
+        "csv": 'elastic.measures/values.csv',
+        "rematch": 'Statistics_Stress_\w+_max',
+        "params": [],
+        "control_params": [],
+        "value": (getMaxHoop, setMaxHoop),
+        "unit": "Pa"
+    },
+    "MaxVonMisesH": {
+        "csv": 'elastic.measures/values.csv',
+        "rematch": 'Statistics_VonMises_\w+_max',
+        "params": [],
+        "control_params": [],
+        "value": (getMaxVonMises, setMaxVonMises),
+        "unit": "Pa"
+    },
+    "MinTH": {
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_T_\w+_min',
+        "params": [],
+        "control_params": [],
+        "value": (getMinT, setMinT),
+        "unit": "K"
+    },
+    "MinT": {
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_Stat_T_min',
+        "params": [],
+        "control_params": [],
+        "value": (getMinT, getMinT),
+        "unit": "K"
     },
     "MeanTH": {
-        "csv": 'heat.measures/values.csv', 
-        "rematch": 'Statistics_MeanT_\w+_mean', 
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_T_\w+_mean',
         "params": [],
         "control_params": [],
         "value": (getMeanT, setMeanT),
-        "unit": "Temperature"
+        "unit": "K"
     },
     "MeanT": {
-        "csv": 'heat.measures/values.csv', 
-        "rematch": 'Statistics_MeanT_mean', 
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_Stat_T_mean',
         "params": [],
         "control_params": [],
         "value": (getMeanT, getMeanT),
-        "unit": "Temperature"
+        "unit": "K"
     },
     "MaxTH": {
-        "csv": 'heat.measures/values.csv', 
-        "rematch": 'Statistics_MeanT_\w+_max', 
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_T_\w+_max',
         "params": [],
         "control_params": [],
         "value": (getMaxT, setMaxT),
-        "unit": "Temperature"
+        "unit": "K"
     },
     "MaxT": {
-        "csv": 'heat.measures/values.csv', 
-        "rematch": 'Statistics_MeanT_max', 
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_Stat_T_max',
         "params": [],
         "control_params": [],
         "value": (getMaxT, getMaxT),
-        "unit": "Temperature"
+        "unit": "K"
     },
     "Flux": {
-        "csv": 'heat.measures/values.csv', 
-        "rematch": 'Statistics_Flux_Channel\d+_integrate', 
+        "csv": 'heat.measures/values.csv',
+        "rematch": 'Statistics_Flux_Channel\d+_integrate',
         "params": [],
         "control_params": [],
         "value": (getFlux, setFlux),
-        "unit": "Power"
+        "unit": "W"
     },
     "HeatCoeff": {
-        "csv": '', 
-        "rematch": '', 
+        "csv": '',
+        "rematch": '',
         "params": [('Dh','Dh\d+'), ('Sh','Sh\d+'), ('hw','hw'),('h','h\d+')],
         "control_params": [],
         "value": (getHeatCoeff, setHeatCoeff),
-        "unit": "h"
+        "unit": "W/m2/K"
     },
     "DT": {
-        "csv": '', 
-        "rematch": '', 
-        "params": [('Tw','Tw'), ('TwH','Tw\d+')],
+        "csv": '',
+        "rematch": '',
+        "params": [('Tw','Tw'), ('TwH','Tw\d+'), ('dTwH','dTw\d+')],
         "control_params": [],
         "value": (getDT, setDT),
-        "unit": "Temperature"
+        "unit": "K"
     },
 }
 
@@ -110,13 +181,18 @@ def setTarget(name: str, params: dict, objectif: float, debug: bool = False):
         if debug:
             print(f"{name} objectif={objectif}, setvalue={I_target}")
         targets[key] = I_target
-    
+
     if debug: print(f"targets: {targets}")
     return targets
 
+def getTargetUnit(name: str, debug: bool = False) -> str:
+    # print(f"getTargetUnit: workingdir={ os.getcwd() } name={name}")
+    defs = targetdefs[name]
+    return defs['unit']
+
 def getTarget(name: str, e, debug: bool = False):
     # print(f"getTarget: workingdir={ os.getcwd() } name={name}")
-    
+
     defs = targetdefs[name]
     if debug:
         print(f"defs: {defs}")
@@ -124,20 +200,23 @@ def getTarget(name: str, e, debug: bool = False):
         print(f"rematch: {defs['rematch']}")
 
     filename = defs['csv']
-    with open(filename, "r") as f:
-        if debug: print(f"csv: {f.name}")
-        filtered_df = post(f.name, defs['rematch'], debug)
-    
-    if debug and e.isMasterRank(): 
+    try:
+        with open(filename, "r") as f:
+            if debug: print(f"csv: {f.name}")
+            filtered_df = post(f.name, defs['rematch'], debug)
+    except:
+        return None
+
+    if debug and e.isMasterRank():
         print(filtered_df)
         for key in filtered_df.columns.values.tolist():
             print(key)
-    
+
     return filtered_df
 
 def Merge(dict1: dict, dict2: dict, debug: bool = False) -> dict:
 
-    if debug : 
+    if debug :
         print(f"dict1: {dict1}")
         print(f"dict2: {dict2}")
 
@@ -150,12 +229,11 @@ def Merge(dict1: dict, dict2: dict, debug: bool = False) -> dict:
         else:
             dict2[key1] = dict1[key1]
 
-    if debug : 
+    if debug :
         print(f"dict1: {dict1}")
         print(f"dict2: {dict2}")
-            
 
-    if debug : 
+    if debug :
         print(f"res: {dict2}")
     return dict2
 
@@ -164,7 +242,7 @@ def getparam(param:str, parameters: dict, rmatch: str, debug: bool = False ):
     """
     if debug:
         print(f"getparam: {param} ====== Start")
-    
+
     n = 0
     val = {}
 
@@ -178,7 +256,7 @@ def getparam(param:str, parameters: dict, rmatch: str, debug: bool = False ):
             val[marker] = { param: parameters[p]}
             if debug:
                 print(f"{p}: {parameters[p]}")
-    
+
     if debug:
         print(f"val: {val}")
         print(f"getparam: {param} ====== Done")
@@ -188,8 +266,8 @@ def getparam(param:str, parameters: dict, rmatch: str, debug: bool = False ):
 def post(csv: str, rmatch: str, debug: bool = False):
     """
     extract data for csv result files
-    
-    eg: 
+
+    eg:
     rmatch= "Intensity_\w+_integrate"
     csv = ["cfpdes.heat.measures.csv", "cfpdes.magnetic.measures.csv"]
     """
@@ -208,7 +286,7 @@ def post(csv: str, rmatch: str, debug: bool = False):
 
         tmp_df = _df.filter(regex=(rmatch))
         if debug: print(f"tmp_df: {tmp_df}")
-            
+
         df = pd.concat([df, tmp_df], axis='columns')
 
     return df
@@ -216,7 +294,7 @@ def post(csv: str, rmatch: str, debug: bool = False):
 def update(cwd: str, jsonmodel: str, paramsdict: dict, params: List[str], bcparams: dict, objectif: float, debug: bool=False):
     # Update tensions U
     import re
-    
+
     pwd = os.getcwd()
     os.chdir(cwd)
     if debug:
@@ -225,7 +303,7 @@ def update(cwd: str, jsonmodel: str, paramsdict: dict, params: List[str], bcpara
     with open(jsonmodel, 'r') as jsonfile:
         dict_json = json.loads(jsonfile.read())
         parameters = dict_json['Parameters']
-    
+
     for key in paramsdict:
         for p in params:
             if debug:
@@ -250,8 +328,6 @@ def update(cwd: str, jsonmodel: str, paramsdict: dict, params: List[str], bcpara
     #     content = cfgfile.read()
     # print("content:", cregexp.sub(f'-I{str(objectif)}A', content))
     # print("content:", jregexp.sub(f'-I{str(objectif)}A.json', content))
-    
+
     os.chdir(pwd)
     return 0
-
-
