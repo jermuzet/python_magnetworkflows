@@ -115,7 +115,10 @@ ENV/
 
 # data folder
 data
-feelppdb
+feelppdb*
+M9_*cfg
+HL*cfg
+*.json
 
 log*
 
