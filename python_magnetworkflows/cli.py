@@ -1,7 +1,6 @@
 """
-Run feelpp model 
+Run feelpp model
 """
-from typing import List
 
 import sys
 import os
@@ -10,15 +9,20 @@ import configparser
 
 import re
 import json
+
 import pandas as pd
+import numpy as np
 from tabulate import tabulate
 
-from .params import targetdefs, setTarget, getTarget, getTargetUnit, getparam, update, Merge
-from .solver import init, solve
+from .params import targetdefs, getparam, Merge, setTarget, update_U
+from .solver import init
 from .real_methods import flow_params
 # from ..units import load_units
 
+from .oneconfig import oneconfig
+
 def main():
+    # print(f'sys.argv({type(sys.argv)})={sys.argv}')
 
     epilog = "Setup for cfpdes static formulations\n" \
              "Support: only magnet of insert type\n" \
@@ -27,24 +31,29 @@ def main():
              "Before running adapt flow_params to your magnet setup \n"
 
     command_line = None
-    parser = argparse.ArgumentParser(description="Cfpdes HiFiMagnet Fully Coupled model")
+    parser = argparse.ArgumentParser(description="Cfpdes model", epilog=epilog)
     parser.add_argument("cfgfile", help="input cfg file (ex. HL-31.cfg)")
     parser.add_argument("--wd", help="set a working directory", type=str, default="")
+    
+    # TODO: make a group: oneconfig
+    # TODO make current a dict: magnet_name: value, targetkey: value
+    parser.add_argument("--dict", help="specify requested current as dict", type=dict)
     parser.add_argument("--current", help="specify requested current (default: 31kA)", nargs='+', metavar='Current', type=float, default=[31.e+3])
-    
-    # TODO: from_current, to_current, step_current to mimic commissionning
-    parser.add_argument("--from", help="specify requested current (default: 31kA)", nargs='+', metavar='Current', type=float)
-    parser.add_argument("--to", help="specify requested current (default: 31kA)", nargs='+', metavar='Current', type=float)
-    parser.add_argument("--step", help="specify requested current (default: 31kA)", nargs='+', metavar='Current', type=float)
-    
+
+    # TODO: make a group: commissionning
+    parser.add_argument("--current_from", help="specify starting currents", nargs='+', metavar='Current', type=float)
+    parser.add_argument("--current_to", help="specify stopping current", nargs='+', metavar='Current', type=float)
+    parser.add_argument("--current_step", help="specify requested number current steps", nargs='+', metavar='Current', type=int)
+
     parser.add_argument("--cooling", help="choose cooling type", type=str,
                     choices=['mean', 'grad', 'meanH', 'gradH'], default='mean')
     parser.add_argument("--eps", help="specify requested tolerance (default: 1.e-3)", type=float, default=1.e-3)
     parser.add_argument("--itermax", help="specify maximum iteration (default: 10)", type=int, default=10)
     parser.add_argument("--debug", help="activate debug", action='store_true')
     parser.add_argument("--verbose", help="activate verbose", action='store_true')
+
+    # TODO make flow a dict: magnet_name: flow_params.json
     parser.add_argument("--flow_params", help="select flow param json file", type=str, default="flow_params.json")
-    # TODO add flow max, Vpmax, Imax, Vpump correlation
 
     args = parser.parse_args()
     if args.debug:
@@ -65,16 +74,34 @@ def main():
     feelpp_config = configparser.ConfigParser()
     with open(args.cfgfile, 'r') as inputcfg:
         feelpp_config.read_string('[DEFAULT]\n[main]\n' + inputcfg.read())
+        feelpp_directory = feelpp_config['main']['directory']
+        """
+        for section in feelpp_config['main']:
+            print(f"feelpp_cfg/main/{section}: {feelpp_config['main'][section]}")
         if args.debug:
             print(f"feelpp_cfg: {feelpp_config['main']}")
 
             for section in feelpp_config.sections():
                 print(f"section: {section}")
+        """
 
         jsonmodel = feelpp_config['cfpdes']['filename']
         jsonmodel = jsonmodel.replace(r"$cfgdir/",'')
-        if args.debug:
-            print(f"jsonmodel={jsonmodel}")
+
+    # args.dict = currents:  {magnet.name: {'value': current.value, 'type': magnet.type}}
+    if args.dict:
+        print(f'dict: {args.dict}')
+        for key in args.dict:
+            data = args.dict[key]
+            if data['type'] == 'helix':
+                # change rematch, params, control_params
+                targetdefs[f'I_{key}'] = targetdefs['I']
+            if data['type'] == 'bitter':
+                # change rematch, params, control_params
+                targetdefs[f'I_{key}'] = targetdefs['I']
+                targetdefs[f'I_{key}']['rematch'] = 'Statistics_Intensity_Bitter_\w+_integrate'
+                targetdefs[f'I_{key}']['params'] =  [('N',f'{key}_N_\w+')],
+                targetdefs[f'I_{key}']['control_params'] = [('U', f'{key}_U_\w+', update_U)]
 
     # Get Parameters from JSON model file
     parameters = {}
@@ -93,7 +120,8 @@ def main():
         params = Merge(tmp, params, args.debug)
 
     for p in targetdefs['I']['params']:
-        if args.debug: print(f"extract compute params for {p[0]}")
+        if args.debug:
+            print(f"extract compute params for {p[0]}")
         tmp = getparam(p[0], parameters, p[1], args.debug)
         params = Merge(tmp, params, args.debug)
 
@@ -114,215 +142,113 @@ def main():
             tmp = getparam(bc_p[0], parameters, bc_p[1], args.debug)
             bc_params = Merge(tmp, bc_params, args.debug)
 
+    # init feelpp env
+    (feelpp_env, feel_pb) = init(args, feelpp_directory)
+    if feelpp_env.isMasterRank():
+        print(f'jsonmodel={jsonmodel}')
+
     # print("params:", params)
     if args.debug:
         print("bc_params:", bc_params)
 
-    pfields = ['I', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux']
-    # TODO add MeanVonMisesH, MeanHoopH
-    pfields.append('MinVonMisesH')
-    pfields.append('MeanVonMisesH')
-    pfields.append('MaxVonMisesH')
-    pfields.append('MinHoopH')
-    pfields.append('MeanHoopH')
-    pfields.append('MaxHoopH')
-    dict_df = {}
-        
-    # init feelpp env
-    (feelpp_env, feel_pb) = init(args)
+    if args.current_from:
+        from_currents = args.current_from
+        if not args.current_to:
+            if feelpp_env.isMasterRank():
+                print('must have --to activated')
+            return 1
+        if len(args.current_to) != len(args.current_from):
+            if feelpp_env.isMasterRank():
+                print('--to must have the same number of args as --from')
+            return 1
 
-    def oneconfig(vcurrents: List, params, bc_params):
-        """
-        Run a simulation until currents are reached
-        # define targets
-        # TODO
-        # insert: IH, params N_H\* control_params U_H\* 'Statistics_Intensity_H\w+_integrate'
-        # bitter: IB, other U_\*, extract name from U_* to get N_*
-        # supra: IS params from I_\*, ............. I_\* to get N_*
-        """
+        to_currents = args.current_to
+        if not args.current_step:
+            if feelpp_env.isMasterRank():
+                print('must have --step activated')
+            return 1
 
-        targets = setTarget('I', params, vcurrents[0], args.debug)
-        # print("targets:", targets)
+        if len(args.current_step) != len(args.current_from):
+            if feelpp_env.isMasterRank():
+                print('--step must have the same number of args as --from')
+            return 1
+        steps_currents = args.current_step
 
-        # solve (output params contains both control_params and bc_params values )
-        # TODO loop from_current to to_current by step current
-        (params, bcparams) = solve(feelpp_env, feel_pb, args, 'I', params, control_params, bc_params, targets)
+        if len(from_currents) == 1:
+            table_headers = None
+            table_values = []
 
-        # update
-        update(cwd, jsonmodel, params, control_params, bcparams, vcurrents[0], args.debug)
-
-        # display csv results
-        # TODO use units
-        # get Power for Insert, Bitter
-        if feelpp_env.isMasterRank():
-            print(f"update: workingdir={ os.getcwd() }")
-        df = getTarget('Power', feelpp_env, args.debug)
-        if feelpp_env.isMasterRank():
-            print(f"I: {vcurrents[0]} [A]\tPower: {df.iloc[-1][0]} [W]")
-            # TODO add bitter current and power if any Bitters
-
-        # TODO when from_current:
-        # create same cvs as below but tables are by current
-        # mean that the following line are in the loop
-        # and that the save is done afterwards
-
-        if feelpp_env.isMasterRank():
-            print(f'Save tables to csv files: workingdir={os.getcwd()}')
-    
-        # Stats - to be displayed in results
-        # TODO: list of fields depends on method used
-        for p in pfields:
-            df = getTarget(p, feelpp_env, args.debug)
-            if not df is None:
-                # TODO change keys (symbols+units)
-                # create new key dict
-                keys = df.columns.values.tolist()
-                nkeys = {}
-                for item in keys:
-                    nitem = item
-                    if re.match(targetdefs[p]['rematch'], item):
-                        regexp = re.split('_', targetdefs[p]['rematch'])
-                        nitem = item.replace(regexp[0], '')
-                        nitem = nitem.replace(regexp[1], '')
-                        nitem = nitem.replace(regexp[3], '')
-                        nitem = nitem.replace('__', '')
-                        # remove _ if nitem end
-                        if nitem.endswith('_'):
-                            nitem = nitem[:-1]
-                        # print(f"{p}: {nitem}")
-                    nkeys[item] = nitem
-
-                # save only last line
-                # TODO remove all rows except latest row
-                df.rename(columns=nkeys, inplace=True)
+            current0 = from_currents[0]
+            dcurrent0 = (to_currents[0]-from_currents[0])/float(steps_currents[0]-1)
+            for i in range(steps_currents[0]):
+                _values = []
                 if feelpp_env.isMasterRank():
-                    print(f"{p} [{targetdefs[p]['unit']}]:\n{tabulate(df, headers='keys', tablefmt='simple')}\n")
+                    print(f'current[{i}]: {current0}')
+                currents = [current0]
+                
+                # pvalues: dict for params key->actual target in targetdefs
+                pvalues = {
+                    "Flux" : "Flux",
+                    "Power" : "Power",
+                    "PowerH" : "PowerH",
+                    "HeatCoeff" : "HeatCoeff",
+                    "DT" : "DT"
+                }
             
-                if p in dict_df:
-                    if feelpp_env.isMasterRank():
-                        print('copy last row from df to _df')
-                else:
-                    _df = df.drop(range(len(df.index)-1))
-                    # print(f'_df={_df.transpose()}')
-                    dict_df[p] = _df
+                postvalues = {
+                    "T": ['MinTH', 'MeanTH', 'MaxTH', 'PowerH'],
+                    "Stress": ['MinVonMises', 'MinHoop', 'MeanVonMises', 'MeanHoop', 'MaxVonMises', 'MaxHoop']
+                }
+                # pfields depends from method
+                pfields = ['I', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux',
+                        'MinVonMises', 'MeanVonMises', 'MaxVonMises',
+                        'MinHoop', 'MeanHoop', 'MaxHoop']
+                targets = setTarget('I', params, current0, args.debug)
+                objectifs = [('I', currents[0], params, control_params, bc_params, targets, pfields, postvalues, pvalues)]
+                results = oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs)
+                (table_headers, _values) = results['I']
+                table_values.append(_values)
+                current0 += dcurrent0
 
-        print(f'dict_df: {dict_df.keys()}')
-    
-        # TODO
-        # save cooling params to csv
-        # save transposed version of the table
+            if feelpp_env.isMasterRank():
+                print(f"Commissionning:\n{tabulate(table_values, headers=table_headers, tablefmt='simple')}\n")
+                with open('commissionning.csv', 'w+') as f:
+                    f.write(tabulate(table_values, headers=table_headers, tablefmt='tsv'))
             
-        for p in pfields:
-            if p in dict_df:
-                _df = dict_df[p]
-                unit = f'{p}[{getTargetUnit(p)}]'
-                _df.rename(index={1: unit}, inplace=True)
-                # _df = _df.transpose()
-
-        if args.debug and feelpp_env.isMasterRank():
-            print("params:", params)
+        elif len(from_currents) > 2:
+            if feelpp_env.isMasterRank():
+                print(f'magnetworkflow/cli: {len(from_currents)} magnets detected - not implement right now')
+    else:
         if feelpp_env.isMasterRank():
-            print("bc_params:", bc_params)
-        _values = {}
-        for param in bc_params:
-            # print(f'{param}')
-            if re.match('^h\d+', param):
-                # print(f"bc[{param}] = {bc_params[param]['h']}")
-                _h =  bc_params[param]['h']
-                _name = f"Channel{param.replace('h','')}"
-                _values[_name] = [_h]
+            print(f"Current: {args.current}")
+        currents = []
+        if isinstance(args.current, list):
+            currents = args.current
+        else:
+            currents.append(currents)
 
-        for param in bc_params:
-            if re.match('^Tw\d+', param):
-                _name = f"Channel{param.replace('Tw','')}"
-                _Tw = bc_params[param]['TwH']
-                _values[_name].append(_Tw)
+        # pvalues: dict for params key->actual target in targetdefs
+        pvalues = {
+            "Flux" : "Flux",
+            "Power" : "Power",
+            "PowerH" : "PowerH",
+            "HeatCoeff" : "HeatCoeff",
+            "DT" : "DT"
+        }
+            
+        postvalues = {
+            "T": ['MinTH', 'MeanTH', 'MaxTH', 'PowerH'],
+            "Stress": ['MinVonMises', 'MinHoop', 'MeanVonMises', 'MeanHoop', 'MaxVonMises', 'MaxHoop']
+        }
+        # pfields depends from method
+        pfields = ['I', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux',
+                    'MinVonMises', 'MeanVonMises', 'MaxVonMises',
+                    'MinHoop', 'MeanHoop', 'MaxHoop']
+        targets = setTarget('I', params, currents[0], args.debug)
+        objectifs = [('I', currents[0], params, control_params, bc_params, targets, pfields, postvalues, pvalues)]
+        oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs)
 
-        for param in bc_params:
-            if re.match('^dTw\d+', param):
-                _name = f"Channel{param.replace('dTw','')}"
-                _dTw = bc_params[param]['dTwH']
-                _values[_name].append(_dTw)
-
-        _h_df = pd.DataFrame(_values, index=['h','Tw','dTw'])
-        _Cooling_df = pd.concat([_h_df, dict_df['Flux']])
-        # print(f'_Cooling_df: {_Cooling_df}')
-        os.makedirs(f'cooling.measures', exist_ok=True)
-        _Cooling_df.to_csv(f'cooling.measures/postvalues.csv', index=True)
-
-        # Temp stats
-        """
-        /workspaces/python_magnetworkflows/python_magnetworkflows/cli.py:233: FutureWarning: Sorting because non-concatenation axis is not aligned. 
-        A future version of pandas will change to not sort by default.
-
-        To accept the future behavior, pass 'sort=False'.
-
-        To retain the current behavior and silence the warning, pass 'sort=True'.
-
-        _T_df = pd.concat([dict_df['MinTH'],dict_df['MeanTH'], dict_df['MaxTH'], dict_df['PowerH']])
-        /workspaces/python_magnetworkflows/python_magnetworkflows/cli.py:240: FutureWarning: Sorting because non-concatenation axis is not aligned. 
-        A future version of pandas will change to not sort by default.
-
-        To accept the future behavior, pass 'sort=False'.
-
-        To retain the current behavior and silence the warning, pass 'sort=True'.
-        """
-
-        _T_df = pd.concat([dict_df['MinTH'],dict_df['MeanTH'], dict_df['MaxTH'], dict_df['PowerH']], sort=True)
-        for p in ['PowerH', 'MinTH', 'MeanTH', 'MaxTH']:
-            _T_df.rename(index={f"{p}[{getTargetUnit(p)}]": f"{p.replace('H','')}[{getTargetUnit(p)}]"}, inplace=True)
-        if args.debug and feelpp_env.isMasterRank():
-            print(f'_T_df = {_T_df}')
-        _T_df.to_csv(f'heat.measures/postvalues.csv', index=True)
-
-        # Stress, VonMises stats
-        if 'MeanVonMisesH' in dict_df:
-            _Stress_df = pd.concat([dict_df['MeanVonMisesH'],dict_df['MeanHoopH']], sort=True)
-            """
-            for p in ['MeanVonMisesH', 'MeanHoopH']:
-                _Stress_df.rename(index={f"{p}[{getTargetUnit(p)}]": f"{p.replace('H','')}"}, inplace=True)
-            """
-            if args.debug and feelpp_env.isMasterRank():
-                print(f'_Stress_df = {_Stress_df}')
-            _Stress_df.to_csv(f'elastic.measures/postvalues.csv', index=True)
-
-    print(f"Current: {args.current}")
-    currents = []
-    if isinstance(args.current, list):
-        currents = args.current
-    else:
-        currents.append(currents)
-
-    """
-    if args.from:
-        from_currents = args.from
-        if not args.to:
-            print(f'must have --to activated')
-            return(1)
-        if len(args.to) != len(args.from):
-            print(f'--to must have the same number of args as --from')
-            return(1)
-
-        to_currents = args.to
-        if not args.step:
-            print(f'must have --step activated')
-            return(1)
-
-        if len(args.step) != len(args.from):
-            print(f'--step must have the same number of args as --from')
-            return(1)
-        steps_currents = args.step
-
-        # np.linspace(2.0, 3.0, num=5) if step is int
-        # np.arange(0, 5, 0.5) if step is float
-        for i in range(len(args.from)):
-            currents = []
-            oneconfig(currents, params, bc_params)
-    else:
-        oneconfig(currents, params, bc_params)
-    """
-
-    oneconfig(currents, params, bc_params)
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -1,4 +1,6 @@
 """
+Define targets for Axi simulation
+
 structure of a target:
 name: 'I'
 csv: name of the csv file where name data are recorded
@@ -8,7 +10,7 @@ control_params from parameters section,
 value: name of the method to compute name
 """
 
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Type
 
 import os
 
@@ -25,11 +27,29 @@ from .real_methods import getHeatCoeff, setHeatCoeff
 from .real_methods import getDT, setDT
 
 # TODO create/modify targetdefs on the fly
+# add target defs for Bitter: replace H by B
+# add target defs for Supra?
 
 targetdefs = {
+    "B0": {
+        "csv": 'magnetic.measures/values.csv',
+        "rematch": 'Points_B0_expr_Bz',
+        "params": [],
+        "control_params": [],
+        "value": (),
+        "unit": "T"
+        },
+    "Inductance": {
+        "csv": 'magnetic.measures/values.csv',
+        "rematch": 'Statistics_MagneticEnergy_integrate',
+        "params": [],
+        "control_params": [],
+        "value": (),
+        "unit": "T"
+        },
     "I": {
         "csv": 'heat.measures/values.csv',
-        "rematch": 'Statistics_Intensity_\w+_integrate',
+        "rematch": 'Statistics_Intensity_H\w+_integrate',
         "params": [('N','N_\w+')],
         "control_params": [('U', 'U_\w+', update_U)],
         "value": (getCurrent, setCurrent),
@@ -37,7 +57,7 @@ targetdefs = {
         },
     "PowerH": {
         "csv": 'heat.measures/values.csv',
-        "rematch": 'Statistics_Power_\w+_integrate',
+        "rematch": 'Statistics_Power_H\w+_integrate',
         "params": [],
         "control_params": [],
         "value": (getPower, setPower),
@@ -51,49 +71,49 @@ targetdefs = {
         "value": (getPower, setPower),
         "unit": "W"
     },
-    "MinHoopH": {
+    "MinHoop": {
         "csv": 'elastic.measures/values.csv',
-        "rematch": 'Statistics_Stress_\w+_min',
+        "rematch": 'Statistics_Stress_H\w+_min',
         "params": [],
         "control_params": [],
         "value": (getMinHoop, setMinHoop),
         "unit": "Pa"
     },
-    "MinVonMisesH": {
+    "MinVonMises": {
         "csv": 'elastic.measures/values.csv',
-        "rematch": 'Statistics_VonMises_\w+_min',
+        "rematch": 'Statistics_VonMises_H\w+_min',
         "params": [],
         "control_params": [],
         "value": (getMinVonMises, setMinVonMises),
         "unit": "Pa"
     },
-    "MeanHoopH": {
+    "MeanHoop": {
         "csv": 'elastic.measures/values.csv',
-        "rematch": 'Statistics_Stress_\w+_mean',
+        "rematch": 'Statistics_Stress_H\w+_mean',
         "params": [],
         "control_params": [],
         "value": (getMeanHoop, setMeanHoop),
         "unit": "Pa"
     },
-    "MeanVonMisesH": {
+    "MeanVonMises": {
         "csv": 'elastic.measures/values.csv',
-        "rematch": 'Statistics_VonMises_\w+_mean',
+        "rematch": 'Statistics_VonMises_H\w+_mean',
         "params": [],
         "control_params": [],
         "value": (getMeanVonMises, setMeanVonMises),
         "unit": "Pa"
     },
-    "MaxHoopH": {
+    "MaxHoop": {
         "csv": 'elastic.measures/values.csv',
-        "rematch": 'Statistics_Stress_\w+_max',
+        "rematch": 'Statistics_Stress_H\w+_max',
         "params": [],
         "control_params": [],
         "value": (getMaxHoop, setMaxHoop),
         "unit": "Pa"
     },
-    "MaxVonMisesH": {
+    "MaxVonMises": {
         "csv": 'elastic.measures/values.csv',
-        "rematch": 'Statistics_VonMises_\w+_max',
+        "rematch": 'Statistics_VonMises_H\w+_max',
         "params": [],
         "control_params": [],
         "value": (getMaxVonMises, setMaxVonMises),
@@ -101,7 +121,7 @@ targetdefs = {
     },
     "MinTH": {
         "csv": 'heat.measures/values.csv',
-        "rematch": 'Statistics_T_\w+_min',
+        "rematch": 'Statistics_T_H\w+_min',
         "params": [],
         "control_params": [],
         "value": (getMinT, setMinT),
@@ -117,7 +137,7 @@ targetdefs = {
     },
     "MeanTH": {
         "csv": 'heat.measures/values.csv',
-        "rematch": 'Statistics_T_\w+_mean',
+        "rematch": 'Statistics_T_H\w+_mean',
         "params": [],
         "control_params": [],
         "value": (getMeanT, setMeanT),
@@ -133,7 +153,7 @@ targetdefs = {
     },
     "MaxTH": {
         "csv": 'heat.measures/values.csv',
-        "rematch": 'Statistics_T_\w+_max',
+        "rematch": 'Statistics_T_H\w+_max',
         "params": [],
         "control_params": [],
         "value": (getMaxT, setMaxT),
@@ -177,10 +197,11 @@ def setTarget(name: str, params: dict, objectif: float, debug: bool = False):
     # print(f"setTarget: workingdir={ os.getcwd() } name={name}")
     targets = {}
     for key in params:
-        I_target = targetdefs[name]['value'][1](key, params, objectif)
-        if debug:
-            print(f"{name} objectif={objectif}, setvalue={I_target}")
-        targets[key] = I_target
+        if targetdefs[name]['value']:
+            I_target = targetdefs[name]['value'][1](key, params, objectif)
+            if debug:
+                print(f"{name} objectif={objectif}, setvalue={I_target}")
+            targets[key] = I_target
 
     if debug: print(f"targets: {targets}")
     return targets
@@ -190,7 +211,7 @@ def getTargetUnit(name: str, debug: bool = False) -> str:
     defs = targetdefs[name]
     return defs['unit']
 
-def getTarget(name: str, e, debug: bool = False):
+def getTarget(name: str, e, debug: bool = False) -> pd.DataFrame:
     # print(f"getTarget: workingdir={ os.getcwd() } name={name}")
 
     defs = targetdefs[name]
@@ -205,7 +226,7 @@ def getTarget(name: str, e, debug: bool = False):
             if debug: print(f"csv: {f.name}")
             filtered_df = post(f.name, defs['rematch'], debug)
     except:
-        return None
+        return pd. DataFrame()
 
     if debug and e.isMasterRank():
         print(filtered_df)

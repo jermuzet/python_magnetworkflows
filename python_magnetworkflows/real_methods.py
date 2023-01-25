@@ -1,5 +1,4 @@
 import json
-import pandas as pd
 import math
 
 import warnings
@@ -8,6 +7,9 @@ from pint import UnitRegistry, Unit, Quantity
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     Quantity([])
+
+import pandas as pd
+import freesteam
 
 # Pint configuration
 ureg = UnitRegistry()
@@ -122,13 +124,12 @@ def setFlux():
 
 def vpump(objectif: float) -> float:
     Vpump = Vpmax
-    Vpump0 = 1000
     if objectif <= Imax:
         Vpump = Vpump0+(Vpmax-Vpump0)*(objectif/Imax)**2
 
     return Vpump
 
-def flow(objectif: float) -> float: 
+def flow(objectif: float) -> float:
     """
     compute flow in m^3/s
     """
@@ -154,16 +155,24 @@ def umean(objectif: float, section: float) -> float:
 def rho(Tw: float, P: float) -> float:
     """
     compute water volumic mass in ???
-    TODO link with freesteam
+
+    Tw: Temperature in Kelvin
+    P: Pressure in Bar
     """
-    return 1.e+3
+    Steam = freesteam.steam_pT(P*1.e+5,Tw)
+    # print(f'rho={Steam.rho}')
+    return Steam.rho
 
 def Cp(Tw: float, P: float) -> float:
     """
     compute water specific heat in ???
-    TODO link with freesteam
+    
+    Tw: Temperature in Kelvin
+    P: Pressure in Bar
     """
-    return 2840
+    Steam = freesteam.steam_pT(P*1.e+5,Tw)
+    # print(f'Cp={Steam.cp}')
+    return Steam.cp
 
 def montgomery(Tw: float, Umean: float, Dh: float) -> float:
     """
@@ -173,7 +182,6 @@ def montgomery(Tw: float, Umean: float, Dh: float) -> float:
     Umean: m/s
     Dh: meter
     """
-    
     return 1426*(1+1.5e-2*(Tw-273))*math.exp(math.log(Umean)*0.8)/math.exp(math.log(Dh)*0.2)
 
 def getDT(objectif: float, Power: float, Tw: float, P: float) -> float:
@@ -191,5 +199,3 @@ def getHeatCoeff(Dh: float, Umean: float, Tw: float):
 
 def setHeatCoeff():
     pass
-
-
