@@ -33,7 +33,7 @@ RUN apt update && \
     echo "deb http://archive.ubuntu.com/ubuntu $(lsb_release -cs)-proposed multiverse"  |  tee -a /etc/apt/sources.list && \
     apt install -y debian-keyring && \
     cp /usr/share/keyrings/debian-maintainers.gpg /etc/apt/trusted.gpg.d && \
-    echo "deb http://euler.GRENOBLE.LNCMI.LOCAL/~trophime/debian/ $(lsb_release -cs) main" > /etc/apt/sources.list.d/lncmi.list && \
+    echo "deb http://euler.lncmig.local/~christophe.trophime@LNCMIG.local/debian/ $(lsb_release -cs) main" > /etc/apt/sources.list.d/lncmi.list && \
     apt update
 
 
