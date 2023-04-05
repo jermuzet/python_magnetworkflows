@@ -50,14 +50,14 @@ targetdefs = {
     "I": {
         "csv": 'heat.measures/values.csv',
         "rematch": 'Statistics_Intensity_H\w+_integrate',
-        "params": [('N','N_\w+')],
-        "control_params": [('U', 'U_\w+', update_U)],
+        "params": [('N','N_H\w+')],
+        "control_params": [('U', 'U_H\w+', update_U)],
         "value": (getCurrent, setCurrent),
         "unit": "A"
         },
     "PowerH": {
         "csv": 'heat.measures/values.csv',
-        "rematch": 'Statistics_Power_H\w+_integrate',
+        "rematch": 'Statistics_Power_\w+_integrate',
         "params": [],
         "control_params": [],
         "value": (getPower, setPower),
@@ -186,7 +186,7 @@ targetdefs = {
     "DT": {
         "csv": '',
         "rematch": '',
-        "params": [('Tw','Tw'), ('TwH','Tw\d+'), ('dTwH','dTw\d+')],
+        "params": [('Tw','Tw'), ('Tw','Tw\d+'), ('dTw','dTw\d+')],
         "control_params": [],
         "value": (getDT, setDT),
         "unit": "K"
@@ -312,7 +312,7 @@ def post(csv: str, rmatch: str, debug: bool = False):
 
     return df
 
-def update(cwd: str, jsonmodel: str, paramsdict: dict, params: List[str], bcparams: dict, objectif: float, debug: bool=False):
+def update(cwd: str, name: str, jsonmodel: str, paramsdict: dict, params: List[str], bcparams: dict, objectif: float, debug: bool=False):
     # Update tensions U
     import re
 
@@ -333,10 +333,14 @@ def update(cwd: str, jsonmodel: str, paramsdict: dict, params: List[str], bcpara
                 print(f"after {p}_{key} = {paramsdict[key][p]}")
             parameters[f'{p}_{key}'] = paramsdict[key][p]
 
-    for key in bcparams:
-        parameters[key] = bcparams[key]
+    for key in bcparams[name]:
+        if debug:
+            print(f"param: {key}")
+            print(f"init {key} = {parameters[f'{key}']}")
+            print(f"after {key} = {bcparams[name][key]['value']}")
+        parameters[key] = bcparams[name][key]['value']
 
-    new_name_json =  jsonmodel.replace('.json', f'-I{str(objectif)}A.json')
+    new_name_json =  jsonmodel.replace('.json', f'-{name}{str(objectif)}A.json')
 
     with open(new_name_json, 'w+') as jsonfile:
         jsonfile.write(json.dumps(dict_json, indent=4))
@@ -351,4 +355,4 @@ def update(cwd: str, jsonmodel: str, paramsdict: dict, params: List[str], bcpara
     # print("content:", jregexp.sub(f'-I{str(objectif)}A.json', content))
 
     os.chdir(pwd)
-    return 0
+    return new_name_json

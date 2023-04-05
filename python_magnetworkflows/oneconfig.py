@@ -49,7 +49,7 @@ def oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs: list):
         dict_df = {}
         
         (name, value, params, control_params, bc_params, targets, pfields, postvalues, pvalues) = objectif
-        update(cwd, jsonmodel, params, control_params, bc_params, value, args.debug)
+        jsonmodel=update(cwd, name, jsonmodel, params, control_params, bcparams, value, args.debug)
         if args.debug and feelpp_env.isMasterRank():
             print(f'bcparams[{name}]: {bcparams[name]}')
         # print(f'params: {params}')
@@ -162,17 +162,17 @@ def oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs: list):
         To retain the current behavior and silence the warning, pass 'sort=True'.
         """
 
-                    
-        _T_df = pd.concat([dict_df[p] for p in postvalues['T']], sort=True)
-        for p in postvalues['T']:
-            _T_df.rename(index={f"{p}[{getTargetUnit(p)}]": f"{p.replace('H','')}[{getTargetUnit(p)}]"}, inplace=True)
-        if args.debug and feelpp_env.isMasterRank():
-            print(f'_T_df = {_T_df}')
-        _T_df.to_csv('heat.measures/postvalues.csv', index=True)
+        if postvalues['T'][0] in dict_df:
+            _T_df = pd.concat([dict_df[p] for p in postvalues['T']], sort=True)
+            for p in postvalues['T']:
+                _T_df.rename(index={f"{p}[{getTargetUnit(p)}]": f"{p.replace('H','')}[{getTargetUnit(p)}]"}, inplace=True)
+            if args.debug and feelpp_env.isMasterRank():
+                print(f'_T_df = {_T_df}')
+            _T_df.to_csv('heat.measures/postvalues.csv', index=True)
 
         # Stress, VonMises stats
         if postvalues['Stress'][0] in dict_df:
-            _Stress_df = pd.concat([dict_df[p] for p in postValues['Stress']], sort=True)
+            _Stress_df = pd.concat([dict_df[p] for p in postvalues['Stress']], sort=True)
             for p in postvalues["Stress"]:
                 _Stress_df.rename(index={f"{p}[{unit}]": f"{p}[{unit}]"}, inplace=True)
             if feelpp_env.isMasterRank():

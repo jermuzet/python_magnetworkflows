@@ -105,7 +105,7 @@ def solve(e, f, args, objectifs: list):
             flux_df = getTarget(pvalues['Flux'], e, args.debug)
             power_df = getTarget(pvalues['PowerH'], e, args.debug)
             SPower_H = power_df.iloc[-1].sum()
-            Power = getTarget("Power", e, args.debug)
+            Power = getTarget("Power", e, args.debug) # TODO just for helix -> change for Bitter
             if args.debug and e.isMasterRank():
                 print(f'it={it} Power={Power.iloc[-1,0]} SPower_H={SPower_H} PowerH={power_df.iloc[-1]}')
             Pressure = pressure(val) # dummy call to get a Pressure value
@@ -124,7 +124,7 @@ def solve(e, f, args, objectifs: list):
                 PowerCh = flux_df.iloc[-1, i]
                 if args.debug and e.isMasterRank():
                     print(f"Channel{i}: umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}")
-                Tw = float(bcs_params[f'Tw{i}']['TwH'])
+                Tw = float(bcs_params[f'Tw{i}']['Tw'])
                 dTwi = targetdefs[pvalues['DT']]['value'][0](val, PowerCh, Tw, Pressure)
                 hi = targetdefs[pvalues['HeatCoeff']]['value'][0](d, Umean, Tw)
                 f.addParameterInModelProperties(f'dTw{i}', dTwi)
@@ -166,4 +166,3 @@ def solve(e, f, args, objectifs: list):
         df.to_csv(resfile, encoding='utf-8')
 
     return (results, df)
-

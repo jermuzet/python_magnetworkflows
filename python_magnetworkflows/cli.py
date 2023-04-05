@@ -36,8 +36,9 @@ def main():
     parser.add_argument("--wd", help="set a working directory", type=str, default="")
     
     # TODO: make a group: oneconfig
-    # TODO make current a dict: magnet_name: value, targetkey: value
-    parser.add_argument("--dict", help="specify requested current as dict", type=dict)
+    # TODO make current a dict: magnet_name: value, targetkey: value -> '{ "magnet_name": {"value": current value, "type": "helix" or "bitter"} }'
+    # ex dict :'{"Bitter_M10":{"value":11930,"type":"bitter"},"H6":{"value":11939,"type":"helix"}}'
+    parser.add_argument("--mdata", help="specify requested current as dict ", type=json.loads)
     parser.add_argument("--current", help="specify requested current (default: 31kA)", nargs='+', metavar='Current', type=float, default=[31.e+3])
 
     # TODO: make a group: commissionning
@@ -88,20 +89,23 @@ def main():
         jsonmodel = feelpp_config['cfpdes']['filename']
         jsonmodel = jsonmodel.replace(r"$cfgdir/",'')
 
-    # args.dict = currents:  {magnet.name: {'value': current.value, 'type': magnet.type}}
-    if args.dict:
-        print(f'dict: {args.dict}')
-        for key in args.dict:
-            data = args.dict[key]
-            if data['type'] == 'helix':
+    # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type}} ex:'{"Bitter_M10":{"value":11930,"type":"bitter"},"H6":{"value":11939,"type":"helix"}}'
+    if args.mdata:
+        import copy
+        
+        print(f'mdata: {args.mdata}')
+        for key in args.mdata:
+            data = args.mdata[key]
+            key_type=data['type']
+            if key_type == 'helix':
                 # change rematch, params, control_params
-                targetdefs[f'I_{key}'] = targetdefs['I']
-            if data['type'] == 'bitter':
+                targetdefs[f'I_{key_type}'] = copy.deepcopy(targetdefs['I'])
+            if key_type == 'bitter':
                 # change rematch, params, control_params
-                targetdefs[f'I_{key}'] = targetdefs['I']
-                targetdefs[f'I_{key}']['rematch'] = 'Statistics_Intensity_Bitter_\w+_integrate'
-                targetdefs[f'I_{key}']['params'] =  [('N',f'{key}_N_\w+')],
-                targetdefs[f'I_{key}']['control_params'] = [('U', f'{key}_U_\w+', update_U)]
+                targetdefs[f'I_{key_type}'] = copy.deepcopy(targetdefs['I'])
+                targetdefs[f'I_{key_type}']['rematch'] = f'Statistics_Intensity_B\w+_integrate'
+                targetdefs[f'I_{key_type}']['params'] =  [('N',f'N_B\w+')]
+                targetdefs[f'I_{key_type}']['control_params'] = [('U', f'U_B\w+', update_U)]
 
     # Get Parameters from JSON model file
     parameters = {}
@@ -109,23 +113,48 @@ def main():
         dict_json = json.loads(jsonfile.read())
         parameters = dict_json['Parameters']
 
-    params = {}
-    bc_params = {}
-    control_params = []
-    for p in targetdefs['I']['control_params']:
-        if args.debug:
-            print(f"extract control params for {p[0]}")
-        control_params.append(p[0])
-        tmp = getparam(p[0], parameters, p[1], args.debug)
-        params = Merge(tmp, params, args.debug)
+    if args.mdata:
+        params_mdata=[]
+        control_params_mdata=[]
+        for key in args.mdata:
+            data = args.mdata[key]
+            key_type=data['type']
+            params = {}
+            control_params = []
+            for p in targetdefs[f'I_{key_type}']['control_params']:
+                if args.debug:
+                    print(f"extract control params for {p[0]}")
+                control_params.append(p[0])
+                tmp = getparam(p[0], parameters, p[1], args.debug)
+                params = Merge(tmp, params, args.debug)
 
-    for p in targetdefs['I']['params']:
-        if args.debug:
-            print(f"extract compute params for {p[0]}")
-        tmp = getparam(p[0], parameters, p[1], args.debug)
-        params = Merge(tmp, params, args.debug)
+            for p in targetdefs[f'I_{key_type}']['params']:
+                if args.debug:
+                    print(f"extract compute params for {p[0]}")
+                tmp = getparam(p[0], parameters, p[1], args.debug)
+                params = Merge(tmp, params, args.debug)
 
+            params_mdata.append(params)
+            control_params_mdata.append(control_params)
+            
+    else :
+        params = {}
+        control_params = []
+        for p in targetdefs['I']['control_params']:
+            if args.debug:
+                print(f"extract control params for {p[0]}")
+            control_params.append(p[0])
+            tmp = getparam(p[0], parameters, p[1], args.debug)
+            params = Merge(tmp, params, args.debug)
+
+        for p in targetdefs['I']['params']:
+            if args.debug:
+                print(f"extract compute params for {p[0]}")
+            tmp = getparam(p[0], parameters, p[1], args.debug)
+            params = Merge(tmp, params, args.debug)
+    
     # Get Bc params
+    bc_params = {}
     for p in [ 'HeatCoeff', 'DT' ]:
         if args.debug:
             print(f"extract bc params for {p}")
@@ -240,12 +269,30 @@ def main():
             "T": ['MinTH', 'MeanTH', 'MaxTH', 'PowerH'],
             "Stress": ['MinVonMises', 'MinHoop', 'MeanVonMises', 'MeanHoop', 'MaxVonMises', 'MaxHoop']
         }
-        # pfields depends from method
-        pfields = ['I', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux',
-                    'MinVonMises', 'MeanVonMises', 'MaxVonMises',
-                    'MinHoop', 'MeanHoop', 'MaxHoop']
-        targets = setTarget('I', params, currents[0], args.debug)
-        objectifs = [('I', currents[0], params, control_params, bc_params, targets, pfields, postvalues, pvalues)]
+
+        if args.mdata:
+            objectifs=[]
+            mdata_i=0
+            for key in args.mdata :
+                data = args.mdata[key]
+                key_type=data['type']
+                # pfields depends from method
+                pfields = [f'I_{key_type}', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux',
+                            'MinVonMises', 'MeanVonMises', 'MaxVonMises',
+                            'MinHoop', 'MeanHoop', 'MaxHoop']
+                targets = setTarget(f'I_{key_type}', params_mdata[mdata_i], data['value'], args.debug)
+                objectif = (f'I_{key_type}', data['value'], params_mdata[mdata_i], control_params_mdata[mdata_i], bc_params, targets, pfields, postvalues, pvalues)
+                
+                objectifs.append(objectif)
+                mdata_i+=1
+        else:
+            # pfields depends from method
+            pfields = ['I', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux',
+                        'MinVonMises', 'MeanVonMises', 'MaxVonMises',
+                        'MinHoop', 'MeanHoop', 'MaxHoop']
+            targets = setTarget('I', params, currents[0], args.debug)
+            objectifs = [('I', currents[0], params, control_params, bc_params, targets, pfields, postvalues, pvalues)]
+
         oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs)
 
     return 0
