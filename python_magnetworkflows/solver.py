@@ -15,18 +15,10 @@ from .real_methods import pressure, umean, flow, montgomery
 # TODO create toolboxes_options on the fly
 def init(args, directory: str=""):
     e = fpp.Environment(sys.argv, opts=tb.toolboxes_options("coefficient-form-pdes","cfpdes"), config=fpp.localRepository(directory))
-    e.setConfigFile(args.cfgfile)
+    
+    return e
 
-    if e.isMasterRank(): print("Create cfpdes")
-    f = cfpdes.cfpdes(dim=2)
-
-    if e.isMasterRank(): print("Init problem")
-    f.init()
-    # f.printAndSaveInfo()
-
-    return (e, f)
-
-def solve(e, f, args, objectifs: list):
+def solve(e, cwd, meshfile, args, objectifs: list):
     if e.isMasterRank(): 
         print(f"solve: workingdir={ os.getcwd() }")
     
@@ -43,6 +35,11 @@ def solve(e, f, args, objectifs: list):
         headers.append(f'err_max[{name}]')
 
     bcparams = {}
+
+    m2d = fpp.load(fpp.mesh(dim=2), name=meshfile, verbose=1)
+    Xh = fpp.functionSpace(space="Pch", mesh=m2d, order=1)
+    Usave = Xh.element()
+
     while err_max > args.eps and it < args.itermax :
         
         # Update new value of U_Hi_Cuj on feelpp's senvironment
@@ -53,12 +50,39 @@ def solve(e, f, args, objectifs: list):
                     entry = f'{p}_{key}'
                     val = float(paramsdict[key][p])
                     # print(f"{entry}: {val}")
-                    f.addParameterInModelProperties(entry, val)
-        f.updateParameterValues()
+                    Usave.on(
+                        range=fpp.markedelements(
+                            m2d, key
+                        ),
+                        expr=fpp.expr(f"{val}"),
+                    )
+        Usave.save(cwd, name="U")
+
+        # Load new config with new U.h5
+        e.setConfigFile(args.cfgfile)
+
+        if e.isMasterRank(): print("Create cfpdes")
+        f = cfpdes.cfpdes(dim=2)
+
+        if e.isMasterRank(): print("Init problem")
+        f.init()
+
+        # update bcs 
+        if it != 0 :
+            for objectif in objectifs :
+                (name, val, paramsdict, params, bc_params, targets, pfields, postvalues, pvalues) = objectif
+                for i in range(nb_i):
+                    f.addParameterInModelProperties(f'dTw{i}', bcparams[f'dTw{i}']['value'])
+                    f.addParameterInModelProperties(f'h{i}', bcparams[f'h{i}']['value'])
+               
+                f.addParameterInModelProperties("dTw", bcparams['dTw']['value'])
+                f.addParameterInModelProperties("hw", bcparams['hw']['value'] ) 
+
+                f.updateParameterValues()
 
         if args.debug and e.isMasterRank():
             print("Parameters after change :", f.modelProperties().parameters())
-
+                    
         # Solve and export the simulation
         # try:
         f.solve()
@@ -126,26 +150,20 @@ def solve(e, f, args, objectifs: list):
                     print(f"Channel{i}: umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}")
                 Tw = float(bcs_params[f'Tw{i}']['Tw'])
                 dTwi = targetdefs[pvalues['DT']]['value'][0](val, PowerCh, Tw, Pressure)
-                hi = targetdefs[pvalues['HeatCoeff']]['value'][0](d, Umean, Tw)
-                f.addParameterInModelProperties(f'dTw{i}', dTwi)
-                f.addParameterInModelProperties(f'h{i}', hi)        
+                hi = targetdefs[pvalues['HeatCoeff']]['value'][0](d, Umean, Tw)     
                 if args.debug and e.isMasterRank():
                     print(f'it={it} dTw{i}: {dTwi} hw{i}: {hi}')
                 bcparams[f'dTw{i}'] = {'value': dTwi, 'unit': getTargetUnit('DT')}
                 bcparams[f'h{i}'] = {'value': hi, 'unit': getTargetUnit('HeatCoeff')}
+                nb_i=i
 
             Tw = float(bcs_params['Tw']['Tw'])
             dTw = targetdefs[pvalues['DT']]['value'][0](val, SPower_H, Tw, Pressure)
             hw = montgomery(Tw, Umean, sum(Dh)/len(Dh))
-            f.addParameterInModelProperties("dTw", dTw)
-            f.addParameterInModelProperties("hw", hw )        
             if args.debug and e.isMasterRank():
                 print(f'it={it}: dTw={dTw} hw={hw}')
             bcparams['dTw'] = {'value': dTw, 'unit': getTargetUnit('DT')}
             bcparams['hw'] = {'value': hw, 'unit': getTargetUnit('HeatCoeff')}
-
-            f.updateParameterValues()
-
 
         it += 1
 

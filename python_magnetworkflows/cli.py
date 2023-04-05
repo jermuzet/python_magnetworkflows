@@ -88,6 +88,8 @@ def main():
 
         jsonmodel = feelpp_config['cfpdes']['filename']
         jsonmodel = jsonmodel.replace(r"$cfgdir/",'')
+        meshfile = feelpp_config['cfpdes']['mesh.filename']
+        meshfile = meshfile.replace(r"$cfgdir/",'')
 
     # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type}} ex:'{"Bitter_M10":{"value":11930,"type":"bitter"},"H6":{"value":11939,"type":"helix"}}'
     if args.mdata:
@@ -172,7 +174,7 @@ def main():
             bc_params = Merge(tmp, bc_params, args.debug)
 
     # init feelpp env
-    (feelpp_env, feel_pb) = init(args, feelpp_directory)
+    feelpp_env = init(args, feelpp_directory)
     if feelpp_env.isMasterRank():
         print(f'jsonmodel={jsonmodel}')
 
@@ -234,7 +236,7 @@ def main():
                         'MinHoop', 'MeanHoop', 'MaxHoop']
                 targets = setTarget('I', params, current0, args.debug)
                 objectifs = [('I', currents[0], params, control_params, bc_params, targets, pfields, postvalues, pvalues)]
-                results = oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs)
+                results = oneconfig(cwd, feelpp_env, jsonmodel, meshfile, args, objectifs)
                 (table_headers, _values) = results['I']
                 table_values.append(_values)
                 current0 += dcurrent0
@@ -293,7 +295,7 @@ def main():
             targets = setTarget('I', params, currents[0], args.debug)
             objectifs = [('I', currents[0], params, control_params, bc_params, targets, pfields, postvalues, pvalues)]
 
-        oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs)
+        oneconfig(cwd, feelpp_env, jsonmodel, meshfile, args, objectifs)
 
     return 0
 

@@ -15,7 +15,7 @@ from .solver import solve
 # from ..units import load_units
 
 
-def oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs: list):
+def oneconfig(cwd, feelpp_env, jsonmodel, meshfile, args, objectifs: list):
     """
     Run a simulation until currents are reached
     
@@ -41,7 +41,7 @@ def oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs: list):
         table_values.append(float(value))
         table_headers.append(f'{name}[{getTargetUnit(name)}]')    # print("targets:", targets)
 
-    (bcparams, _Current_df) = solve(feelpp_env, feel_pb, args, objectifs)
+    (bcparams, _Current_df) = solve(feelpp_env, cwd, meshfile, args, objectifs)
 
     # update
     results = {}
