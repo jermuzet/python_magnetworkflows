@@ -39,3 +39,10 @@ mpirun -np 2 python -m python_magnetworkflows.workflows.cli HL-test-cfpdes-thele
 ```
 
 ====
+
+```
+python -m python_magnetworkflows.cli \
+  --mdata '{"HLtest":{"value":12000,"type":"helix","filter":"HLtest_","flow":"tmp/M9Bitters_HLtest/HLtest-flow_params.json"}, \
+            "M9Bitters":{"value":31000,"type":"bitter","filter":"M9Bitters_","flow":"tmp/M9Bitters_HLtest/M9Bitters-flow_params.json"}}' \
+  tmp/M9Bitters_HLtest/M9Bitters_HLtest-cfpdes-thelec-Axi-sim.cfg
+```
