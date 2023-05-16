@@ -7,19 +7,15 @@ import os
 import argparse
 import configparser
 
-import re
 import json
 
-import pandas as pd
-import numpy as np
-from tabulate import tabulate
-
-from .params import targetdefs, getparam, Merge, setTarget, update_U
-from .solver import init
-from .real_methods import flow_params
-# from ..units import load_units
+from .waterflow import waterflow
+from .real_methods import getDT, getHeatCoeff
 
 from .oneconfig import oneconfig
+
+# import feelpp as fpp
+# from .params import getparam
 
 def main():
     # print(f'sys.argv({type(sys.argv)})={sys.argv}')
@@ -33,17 +29,10 @@ def main():
     command_line = None
     parser = argparse.ArgumentParser(description="Cfpdes model", epilog=epilog)
     parser.add_argument("cfgfile", help="input cfg file (ex. HL-31.cfg)")
-    parser.add_argument("--wd", help="set a working directory", type=str, default="")
     
     # TODO: make a group: oneconfig
     # TODO make current a dict: magnet_name: value, targetkey: value
-    parser.add_argument("--dict", help="specify requested current as dict", type=dict)
-    parser.add_argument("--current", help="specify requested current (default: 31kA)", nargs='+', metavar='Current', type=float, default=[31.e+3])
-
-    # TODO: make a group: commissionning
-    parser.add_argument("--current_from", help="specify starting currents", nargs='+', metavar='Current', type=float)
-    parser.add_argument("--current_to", help="specify stopping current", nargs='+', metavar='Current', type=float)
-    parser.add_argument("--current_step", help="specify requested number current steps", nargs='+', metavar='Current', type=int)
+    parser.add_argument("--mdata", help="specify current data", type=json.loads)
 
     parser.add_argument("--cooling", help="choose cooling type", type=str,
                     choices=['mean', 'grad', 'meanH', 'gradH'], default='mean')
@@ -52,56 +41,30 @@ def main():
     parser.add_argument("--debug", help="activate debug", action='store_true')
     parser.add_argument("--verbose", help="activate verbose", action='store_true')
 
-    # TODO make flow a dict: magnet_name: flow_params.json
-    parser.add_argument("--flow_params", help="select flow param json file", type=str, default="flow_params.json")
-
     args = parser.parse_args()
     if args.debug:
         print(args)
 
-    cwd = os.getcwd()
-    if args.wd:
-        os.chdir(args.wd)
+    pwd = os.getcwd()
+    print(f'cwd: {pwd}')
 
     # Load units:
     # TODO force millimeter when args.method == "HDG"
     # units = load_units('meter')
 
-    # load flow params
-    flow_params(args.flow_params)
-
     # Load cfg as config
+    jsonmodel = ""
     feelpp_config = configparser.ConfigParser()
     with open(args.cfgfile, 'r') as inputcfg:
         feelpp_config.read_string('[DEFAULT]\n[main]\n' + inputcfg.read())
         feelpp_directory = feelpp_config['main']['directory']
-        """
-        for section in feelpp_config['main']:
-            print(f"feelpp_cfg/main/{section}: {feelpp_config['main'][section]}")
-        if args.debug:
-            print(f"feelpp_cfg: {feelpp_config['main']}")
-
-            for section in feelpp_config.sections():
-                print(f"section: {section}")
-        """
+        print(f'feelpp_directory={feelpp_directory}')
 
         jsonmodel = feelpp_config['cfpdes']['filename']
-        jsonmodel = jsonmodel.replace(r"$cfgdir/",'')
-
-    # args.dict = currents:  {magnet.name: {'value': current.value, 'type': magnet.type}}
-    if args.dict:
-        print(f'dict: {args.dict}')
-        for key in args.dict:
-            data = args.dict[key]
-            if data['type'] == 'helix':
-                # change rematch, params, control_params
-                targetdefs[f'I_{key}'] = targetdefs['I']
-            if data['type'] == 'bitter':
-                # change rematch, params, control_params
-                targetdefs[f'I_{key}'] = targetdefs['I']
-                targetdefs[f'I_{key}']['rematch'] = 'Statistics_Intensity_Bitter_\w+_integrate'
-                targetdefs[f'I_{key}']['params'] =  [('N',f'{key}_N_\w+')],
-                targetdefs[f'I_{key}']['control_params'] = [('U', f'{key}_U_\w+', update_U)]
+        basedir = os.path.dirname(args.cfgfile)
+        print(f'basedir={basedir}')
+        jsonmodel = jsonmodel.replace(r"$cfgdir/",f"{basedir}/")
+        print(f'jsonmodel={jsonmodel}')
 
     # Get Parameters from JSON model file
     parameters = {}
@@ -109,144 +72,163 @@ def main():
         dict_json = json.loads(jsonfile.read())
         parameters = dict_json['Parameters']
 
-    params = {}
-    bc_params = {}
-    control_params = []
-    for p in targetdefs['I']['control_params']:
-        if args.debug:
-            print(f"extract control params for {p[0]}")
-        control_params.append(p[0])
-        tmp = getparam(p[0], parameters, p[1], args.debug)
-        params = Merge(tmp, params, args.debug)
+    targets = {}
 
-    for p in targetdefs['I']['params']:
-        if args.debug:
-            print(f"extract compute params for {p[0]}")
-        tmp = getparam(p[0], parameters, p[1], args.debug)
-        params = Merge(tmp, params, args.debug)
+    # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
+    if args.mdata:
+        for mname, values in args.mdata.items():
+            print(f'mname={mname}, values={values}')
+            filter = values['filter']
+            if values['type'] == 'helix':
+                # change rematch, params, control_params
+                Power = {
+                    "name": "Power",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Power_{filter}integrate",
+                    "post": { "type": "Statistics_Power", "math": "integrate"},
+                    "unit": "W",
+                }
+                PowerH = {
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Power_{filter}\\w+_integrate",
+                    "name": "PowerH",
+                    "post": { "type": "Statistics_Power", "math": "integrate"},
+                    "unit": "W",
+                }
 
-    # Get Bc params
-    for p in [ 'HeatCoeff', 'DT' ]:
-        if args.debug:
-            print(f"extract bc params for {p}")
-        for bc_p in targetdefs[p]['params']:
-            if args.debug:
-                print(f"{bc_p[0]}")
-            tmp = getparam(bc_p[0], parameters, bc_p[1], args.debug)
-            bc_params = Merge(tmp, bc_params, args.debug)
-        if args.debug:
-            print(f"extract bc control_params for {p}")
-        for bc_p in targetdefs[p]['control_params']:
-            if args.debug:
-                print(f"{bc_p[0]}")
-            tmp = getparam(bc_p[0], parameters, bc_p[1], args.debug)
-            bc_params = Merge(tmp, bc_params, args.debug)
+                Flux = {
+                    "name": "Flux",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Flux_{filter}Channel\\d+_integrate",
+                    "post": { "type": "Statistics_Flux", "math": "integrate"},
+                    "unit": "W",
+                }
 
-    # init feelpp env
-    (feelpp_env, feel_pb) = init(args, feelpp_directory)
-    if feelpp_env.isMasterRank():
-        print(f'jsonmodel={jsonmodel}')
-
-    # print("params:", params)
-    if args.debug:
-        print("bc_params:", bc_params)
-
-    if args.current_from:
-        from_currents = args.current_from
-        if not args.current_to:
-            if feelpp_env.isMasterRank():
-                print('must have --to activated')
-            return 1
-        if len(args.current_to) != len(args.current_from):
-            if feelpp_env.isMasterRank():
-                print('--to must have the same number of args as --from')
-            return 1
-
-        to_currents = args.current_to
-        if not args.current_step:
-            if feelpp_env.isMasterRank():
-                print('must have --step activated')
-            return 1
-
-        if len(args.current_step) != len(args.current_from):
-            if feelpp_env.isMasterRank():
-                print('--step must have the same number of args as --from')
-            return 1
-        steps_currents = args.current_step
-
-        if len(from_currents) == 1:
-            table_headers = None
-            table_values = []
-
-            current0 = from_currents[0]
-            dcurrent0 = (to_currents[0]-from_currents[0])/float(steps_currents[0]-1)
-            for i in range(steps_currents[0]):
-                _values = []
-                if feelpp_env.isMasterRank():
-                    print(f'current[{i}]: {current0}')
-                currents = [current0]
+                HeatCoeff = {
+                    "name": "HeatCoeff",
+                    "params": [
+                        ("Dh", f"{filter}Dh\\d+"), 
+                        ("Sh", f"{filter}Sh\\d+"), 
+                        ("hw", f"{filter}hw"), 
+                        ("h", f"{filter}h\\d+")
+                        ],
+                    "value": (getHeatCoeff),
+                    "unit": "W/m2/K",
+                }
                 
-                # pvalues: dict for params key->actual target in targetdefs
-                pvalues = {
-                    "Flux" : "Flux",
-                    "Power" : "Power",
-                    "PowerH" : "PowerH",
-                    "HeatCoeff" : "HeatCoeff",
-                    "DT" : "DT"
+                DT = {
+                    "name": "DT",
+                    "params": [
+                        ("Tw", f"{filter}Tw"), 
+                        ("dTw", f"{filter}dTw"), 
+                        ("TwH", f"{filter}Tw\\d+"), 
+                        ("dTwH", f"{filter}dTw\\d+")
+                        ],
+                    "value": (getDT),
+                    "unit": "K",
                 }
-            
-                postvalues = {
-                    "T": ['MinTH', 'MeanTH', 'MaxTH', 'PowerH'],
-                    "Stress": ['MinVonMises', 'MinHoop', 'MeanVonMises', 'MeanHoop', 'MaxVonMises', 'MaxHoop']
+
+                targets[f'{filter}I'] = {
+                    "objectif": values['value'],
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Intensity_{filter}H\\w+_integrate",
+                    "params": [("N", f"N_{filter}\\w+")],
+                    "control_params": [(f'{filter}U', f"U_{filter}\\w+")],
+                    "computed_params": [HeatCoeff, DT, Flux, Power, PowerH],
+                    "unit": "A",
+                    "name": f"Intensity_{filter}",
+                    "post": { "type": "Statistics_Intensity", "math": "integrate"},
+                    "waterflow": waterflow.flow_params(values['flow'])
                 }
-                # pfields depends from method
-                pfields = ['I', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux',
-                        'MinVonMises', 'MeanVonMises', 'MaxVonMises',
-                        'MinHoop', 'MeanHoop', 'MaxHoop']
-                targets = setTarget('I', params, current0, args.debug)
-                objectifs = [('I', currents[0], params, control_params, bc_params, targets, pfields, postvalues, pvalues)]
-                results = oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs)
-                (table_headers, _values) = results['I']
-                table_values.append(_values)
-                current0 += dcurrent0
 
-            if feelpp_env.isMasterRank():
-                print(f"Commissionning:\n{tabulate(table_values, headers=table_headers, tablefmt='simple')}\n")
-                with open('commissionning.csv', 'w+') as f:
-                    f.write(tabulate(table_values, headers=table_headers, tablefmt='tsv'))
-            
-        elif len(from_currents) > 2:
-            if feelpp_env.isMasterRank():
-                print(f'magnetworkflow/cli: {len(from_currents)} magnets detected - not implement right now')
-    else:
-        if feelpp_env.isMasterRank():
-            print(f"Current: {args.current}")
-        currents = []
-        if isinstance(args.current, list):
-            currents = args.current
-        else:
-            currents.append(currents)
+            if values['type'] == 'bitter':
+                # change rematch, params, control_params
+                Power = {
+                    "name": "Power",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Power_{filter}integrate",
+                    "post": { "type": "Statistics_Power", "math": "integrate"},
+                    "unit": "W",
+                }
+                PowerH = {
+                    "name": "PowerH",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Power_{filter}\\w+_integrate",
+                    "post": { "type": "Statistics_Power", "math": "integrate"},
+                    "unit": "W",
+                }
 
-        # pvalues: dict for params key->actual target in targetdefs
-        pvalues = {
-            "Flux" : "Flux",
-            "Power" : "Power",
-            "PowerH" : "PowerH",
-            "HeatCoeff" : "HeatCoeff",
-            "DT" : "DT"
-        }
-            
-        postvalues = {
-            "T": ['MinTH', 'MeanTH', 'MaxTH', 'PowerH'],
-            "Stress": ['MinVonMises', 'MinHoop', 'MeanVonMises', 'MeanHoop', 'MaxVonMises', 'MaxHoop']
-        }
-        # pfields depends from method
-        pfields = ['I', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux',
-                    'MinVonMises', 'MeanVonMises', 'MaxVonMises',
-                    'MinHoop', 'MeanHoop', 'MaxHoop']
-        targets = setTarget('I', params, currents[0], args.debug)
-        objectifs = [('I', currents[0], params, control_params, bc_params, targets, pfields, postvalues, pvalues)]
-        oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs)
+                Flux = {
+                    "name": "Flux",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Flux_{filter}\\w+_Slit\\d+_integrate",
+                    "post": { "type": "Statistics_Flux", "math": "integrate"},
+                    "unit": "W",
+                }
+
+                HeatCoeff = {
+                    "name": "HeatCoeff",
+                    "params": [
+                        ("Dh", f"{filter}\\w+Dh"), 
+                        ("Sh", f"{filter}\\w+Sh"), 
+                        ("hw", f"{filter}\\w+hw", "\\w+_Slit\\d+", False),
+                        ("h", f"{filter}\\w+hw", "\\w+_Slit\\d+", True)
+                        ],
+                    "value": (getHeatCoeff),
+                    "unit": "W/m2/K",
+                }
+                
+                DT = {
+                    "name": "DT",
+                    "params": [
+                        ("Tw", f"{filter}\\w+_Tw", "\\w+_Slit\\d+", False), 
+                        ("dTw", f"{filter}\\w+_dTw", "\\w+_Slit\\d+", False),
+                        ("TwH", f"{filter}\\w+_Tw", "\\w+_Slit\\d+", True), 
+                        ("dTwH", f"{filter}\\w+_dTw", "\\w+_Slit\\d+", True)
+                        ],
+                    "value": (getDT),
+                    "unit": "K",
+                }
+
+                targets[f'{filter}I'] = {
+                    "objectif": values['value'],
+                    "csv": "heat.measures/values.csv",
+                    'rematch': f'Statistics_Intensity_{filter}\\w+_integrate',
+                    'params': [('N',f'N_{filter}\\w+')],
+                    'control_params': [(f'{filter}U', f'U_{filter}\\w+')],
+                    "computed_params": [HeatCoeff, DT, Flux, Power, PowerH],
+                    "unit": "A",
+                    "name": f"Intensity{filter}",
+                    "post": { "type": "Statistics_Intensity", "math": "integrate"},
+                    "waterflow": waterflow.flow_params(values['flow'])
+                }
+
+    print(f'targets: {targets.keys()}')
+
+    
+    
+    """
+    # pvalues: dict for params key->actual target in targets
+    pvalues = {
+        "Flux" : "Flux",
+        "Power" : "Power",
+        "PowerH" : "PowerH",
+        "HeatCoeff" : "HeatCoeff",
+        "DT" : "DT"
+    }
+        
+    postvalues = {
+        "T": ['MinTH', 'MeanTH', 'MaxTH', 'PowerH'],
+        "Stress": ['MinVonMises', 'MinHoop', 'MeanVonMises', 'MeanHoop', 'MaxVonMises', 'MaxHoop']
+    }
+    # pfields depends from method
+    pfields = ['I', 'PowerH', 'MinTH', 'MeanTH', 'MaxTH', 'Flux',
+                'MinVonMises', 'MeanVonMises', 'MaxVonMises',
+                'MinHoop', 'MeanHoop', 'MaxHoop']
+    
+    """
+
+    oneconfig(feelpp_directory, jsonmodel, args, targets, parameters)
 
     return 0
 

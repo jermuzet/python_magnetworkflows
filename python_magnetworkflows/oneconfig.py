@@ -6,45 +6,89 @@ from typing import List
 import os
 from math import fabs 
 
+import json
+
 import re
 import pandas as pd
 from tabulate import tabulate
 
-from .params import targetdefs, setTarget, getTarget, getTargetUnit, update
-from .solver import solve
+from .params import getparam
+from .solver import init, solve
 # from ..units import load_units
 
 
-def oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs: list):
+def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict):
     """
     Run a simulation until currents are reached
     
-    Right now only use vcurrents[0]
-    
-    # insert: IH, params N_H\* control_params U_H\* 'Statistics_Intensity_H\w+_integrate'
-    # bitter: IB, other U_\*, extract name from U_* to get N_*
-    # supra: IS params from I_\*, ............. I_\* to get N_*
-
-    objectif: name, value, params, control_params, bc_params
+    targets: dict of target (name: objectif , csv, ...)
+    parameters: all jsonmodel parameters
     """
 
     table_values = []
     table_headers = []
+    
+    pwd = os.getcwd()
+    print(f"oneconfig: workingdir={pwd}")
+    basedir = os.path.dirname(args.cfgfile)
+    print(f'jsonmodel={jsonmodel}')
+    print(f'basedir={basedir}')
+    
+    # init feelpp env
+    (feelpp_env, feel_pb) = init(args, feelpp_directory)
+    if feelpp_env.isMasterRank():
+        print(f"oneconfig: after feelpp init workingdir={os.getcwd()}")
+
+    """
+    # init U field
+    Xh = fpp.functionSpace(space="Pch", mesh=feel_pb.mesh(), order=1)
+    usave = Xh.element()
+
+    for target, values in targets.items():
+        params = []
+        for p in values['control_params']:
+            tmp = getparam(p[0], parameters, p[1], args.debug)
+            params += tmp
+
+        for param in params:
+            marker = param.replace('U_','')
+            # print(f'marker: {marker}, goal={values["goals"][marker].iloc[-1]} xx')
+            value = float(parameters[param])
+            usave.on(range=fpp.markedelements(feel_pb.mesh(), marker), expr=fpp.expr(str(value)))
+
+    usave.save(os.getcwd(), name='U_new')
+    """
+
+    for target, values in targets.items():
+        if args.debug and feelpp_env.isMasterRank():
+            print(f"{target}: {values['objectif']}")
+        table_values.append(float(values['objectif']))
+        table_headers.append(f'{target}[{values["unit"]}]')    # print("targets:", targets)
+
+    # capture actual params per target:
+    # {target: {"pname0": value, "pname1": value, ...}}
+    params = {}
+    for key, values in targets.items():
+        params[key] = []
+        for p in values['control_params']:
+            if args.debug:
+                print(f"extract control params for {p[0]}")
+            tmp = getparam(p[0], parameters, p[1], args.debug)
+            params[key] += tmp
+
+    # print(f'targets: {targets}')
+    print(f'params: {params}')
+
+    (bcparams, _Current_df) = solve(feelpp_env, feel_pb, f'{pwd}/{jsonmodel}', args, targets, params, parameters)
 
     if feelpp_env.isMasterRank():
-        print(f"oneconfig: workingdir={ os.getcwd() }")
-
-    for objectif in objectifs:
-        (name, value, params, control_params, bc_params, targets, pfields, postvalues, pvalues) = objectif
-        if feelpp_env.isMasterRank():
-            print(f"{name}: {value}")
-        table_values.append(float(value))
-        table_headers.append(f'{name}[{getTargetUnit(name)}]')    # print("targets:", targets)
-
-    (bcparams, _Current_df) = solve(feelpp_env, feel_pb, args, objectifs)
+        print(f"oneconfig: after solve workingdir={ os.getcwd() }")
+    exit(1)
 
     # update
     results = {}
+    update(cwd, jsonmodel, params, control_params, bc_params, value, args.debug)
+    """
     for objectif in objectifs:
         dict_df = {}
         
@@ -131,9 +175,9 @@ def oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs: list):
             table_headers.append(f"{param}[{bcparams[name][param]['unit']}]")
             _value = bcparams[name][param]['value']
             table_values.append(_value)
-            if re.match('^h\d+', param):
+            if re.match('^h\\d+', param):
                 _name = f"Channel{param.replace('h','')}"
-            if re.match('^dTw\d+', param):
+            if re.match('^dTw\\d+', param):
                 _name = f"Channel{param.replace('dTw','')}"
             _values[_name] = [_value]
             
@@ -145,23 +189,6 @@ def oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs: list):
         _Cooling_df.to_csv('cooling.measures/postvalues.csv', index=True)
 
         # Temp stats
-        """
-        /workspaces/python_magnetworkflows/python_magnetworkflows/cli.py:233: FutureWarning: Sorting because non-concatenation axis is not aligned.
-        A future version of pandas will change to not sort by default.
-
-        To accept the future behavior, pass 'sort=False'.
-
-        To retain the current behavior and silence the warning, pass 'sort=True'.
-
-        _T_df = pd.concat([dict_df['MinTH'],dict_df['MeanTH'], dict_df['MaxTH'], dict_df['PowerH']])
-        /workspaces/python_magnetworkflows/python_magnetworkflows/cli.py:240: FutureWarning: Sorting because non-concatenation axis is not aligned.
-        A future version of pandas will change to not sort by default.
-
-        To accept the future behavior, pass 'sort=False'.
-
-        To retain the current behavior and silence the warning, pass 'sort=True'.
-        """
-
                     
         _T_df = pd.concat([dict_df[p] for p in postvalues['T']], sort=True)
         for p in postvalues['T']:
@@ -183,5 +210,6 @@ def oneconfig(cwd, feelpp_env, feel_pb, jsonmodel, args, objectifs: list):
             print(f"Commissionning:\n{tabulate([table_values], headers=table_headers, tablefmt='simple')}\n")
     
         results[name] = (table_headers, table_values)
-
+        """
+    
     return results
