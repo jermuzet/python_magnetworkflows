@@ -4,7 +4,7 @@ Run feelpp model for one config
 from typing import List
 
 import os
-from math import fabs 
+from math import fabs
 
 import json
 
@@ -13,82 +13,51 @@ import pandas as pd
 from tabulate import tabulate
 
 from .params import getparam
-from .solver import init, solve
+from .solver import solve
+
 # from ..units import load_units
 
 
 def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict):
     """
     Run a simulation until currents are reached
-    
+
     targets: dict of target (name: objectif , csv, ...)
     parameters: all jsonmodel parameters
     """
 
     table_values = []
     table_headers = []
-    
+
     pwd = os.getcwd()
-    print(f"oneconfig: workingdir={pwd}")
     basedir = os.path.dirname(args.cfgfile)
-    print(f'jsonmodel={jsonmodel}')
-    print(f'basedir={basedir}')
-    
-    # init feelpp env
-    (feelpp_env, feel_pb) = init(args, feelpp_directory)
-    if feelpp_env.isMasterRank():
-        print(f"oneconfig: after feelpp init workingdir={os.getcwd()}")
-
-    """
-    # init U field
-    Xh = fpp.functionSpace(space="Pch", mesh=feel_pb.mesh(), order=1)
-    usave = Xh.element()
+    print(f"oneconfig: workingdir={pwd}, jsonmodel={jsonmodel}, basedir={basedir}")
 
     for target, values in targets.items():
-        params = []
-        for p in values['control_params']:
-            tmp = getparam(p[0], parameters, p[1], args.debug)
-            params += tmp
-
-        for param in params:
-            marker = param.replace('U_','')
-            # print(f'marker: {marker}, goal={values["goals"][marker].iloc[-1]} xx')
-            value = float(parameters[param])
-            usave.on(range=fpp.markedelements(feel_pb.mesh(), marker), expr=fpp.expr(str(value)))
-
-    usave.save(os.getcwd(), name='U_new')
-    """
-
-    for target, values in targets.items():
-        if args.debug and feelpp_env.isMasterRank():
-            print(f"{target}: {values['objectif']}")
-        table_values.append(float(values['objectif']))
-        table_headers.append(f'{target}[{values["unit"]}]')    # print("targets:", targets)
+        print(f"{target}: {values['objectif']}")
+        table_values.append(float(values["objectif"]))
+        table_headers.append(
+            f'{target}[{values["unit"]}]'
+        )
 
     # capture actual params per target:
-    # {target: {"pname0": value, "pname1": value, ...}}
     params = {}
     for key, values in targets.items():
         params[key] = []
-        for p in values['control_params']:
+        for p in values["control_params"]:
             if args.debug:
                 print(f"extract control params for {p[0]}")
             tmp = getparam(p[0], parameters, p[1], args.debug)
             params[key] += tmp
 
-    # print(f'targets: {targets}')
-    print(f'params: {params}')
-
-    (bcparams, _Current_df) = solve(feelpp_env, feel_pb, f'{pwd}/{jsonmodel}', args, targets, params, parameters)
-
-    if feelpp_env.isMasterRank():
-        print(f"oneconfig: after solve workingdir={ os.getcwd() }")
-    exit(1)
+    results = solve(
+        feelpp_directory, f"{pwd}/{jsonmodel}", args, targets, params, parameters
+    )
 
     # update
+    """
     results = {}
     update(cwd, jsonmodel, params, control_params, bc_params, value, args.debug)
-    """
     for objectif in objectifs:
         dict_df = {}
         
@@ -211,5 +180,5 @@ def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict
     
         results[name] = (table_headers, table_values)
         """
-    
+
     return results

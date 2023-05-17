@@ -14,9 +14,6 @@ from .real_methods import getDT, getHeatCoeff
 
 from .oneconfig import oneconfig
 
-# import feelpp as fpp
-# from .params import getparam
-
 def main():
     # print(f'sys.argv({type(sys.argv)})={sys.argv}')
 
@@ -171,8 +168,8 @@ def main():
                     "params": [
                         ("Dh", f"{filter}\\w+Dh"), 
                         ("Sh", f"{filter}\\w+Sh"), 
-                        ("hw", f"{filter}\\w+hw", "\\w+_Slit\\d+", False),
-                        ("h", f"{filter}\\w+hw", "\\w+_Slit\\d+", True)
+                        ("hw", f"{filter}\\w+hw", "\\w+_Slit\\w+", False),
+                        ("h", f"{filter}\\w+hw", "\\w+_Slit\\w+", True)
                         ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
@@ -181,10 +178,10 @@ def main():
                 DT = {
                     "name": "DT",
                     "params": [
-                        ("Tw", f"{filter}\\w+_Tw", "\\w+_Slit\\d+", False), 
-                        ("dTw", f"{filter}\\w+_dTw", "\\w+_Slit\\d+", False),
-                        ("TwH", f"{filter}\\w+_Tw", "\\w+_Slit\\d+", True), 
-                        ("dTwH", f"{filter}\\w+_dTw", "\\w+_Slit\\d+", True)
+                        ("Tw", f"{filter}\\w+_Tw", "\\w+_Slit\\w+", False), 
+                        ("dTw", f"{filter}\\w+_dTw", "\\w+_Slit\\w+", False),
+                        ("TwH", f"{filter}\\w+_Tw", "\\w+_Slit\\w+", True), 
+                        ("dTwH", f"{filter}\\w+_dTw", "\\w+_Slit\\w+", True)
                         ],
                     "value": (getDT),
                     "unit": "K",

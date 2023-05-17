@@ -159,6 +159,7 @@ def getTargetUnit(targetdefs: dict, name: str, debug: bool = False) -> str:
     return defs["unit"]
 """
 
+
 def getTarget(targetdefs: dict, name: str, e, debug: bool = False) -> pd.DataFrame:
     # print(f"getTarget: workingdir={ os.getcwd() } name={name}")
 
@@ -178,9 +179,9 @@ def getTarget(targetdefs: dict, name: str, e, debug: bool = False) -> pd.DataFra
         # rename columns
         dict_columns = {}
         for col in filtered_df.columns:
-            cname = col.replace(f'{defs["post"]["type"]}_','')
-            cname = cname.replace(f'_{defs["post"]["math"]}','')
-            dict_columns[col] = cname 
+            cname = col.replace(f'{defs["post"]["type"]}_', "")
+            cname = cname.replace(f'_{defs["post"]["math"]}', "")
+            dict_columns[col] = cname
         filtered_df.rename(columns=dict_columns, inplace=True)
 
     except:
@@ -195,8 +196,7 @@ def getTarget(targetdefs: dict, name: str, e, debug: bool = False) -> pd.DataFra
 
 
 def getparam(param: str, parameters: dict, rmatch: str, debug: bool = False) -> list:
-    """ 
-    """
+    """ """
     if debug:
         print(f"getparam: {param} ====== Start")
 
@@ -250,5 +250,3 @@ def post(csv: str, rmatch: str, debug: bool = False):
         df = pd.concat([df, tmp_df], axis="columns")
 
     return df
-
-

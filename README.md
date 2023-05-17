@@ -38,7 +38,24 @@ singularity exec -B /data/M9_M19020601-cfpdes-thmagel_hcurl-nonlinear-Axi-sim/da
 mpirun -np 2 python -m python_magnetworkflows.workflows.cli HL-test-cfpdes-thelec-Axi-sim.cfg --eps 1.e-5
 ```
 
-====
+==== testsuite
+
+Create a setup for thelec axi sim for 'M9Bitters_HLtest' site
+
+```
+export MAGNETDB_API_KEY=
+python -m python_magnetapi ...
+```
+
+Edit 'tmp/M9Bitters_HLtest/M9Bitters_HLtest-cfpdes-thelec-Axi-sim.json' and modify a U_ parameter
+
+Then create a initial U.h5 file:
+
+```
+python -m python_magnetworkflows.create_U --cfgfile tmp/M9Bitters_HLtest/M9Bitters_HLtest-cfpdes-thelec-Axi-sim.cfg --odir tmp/M9Bitters_HLtest
+```
+
+Run the workflow:
 
 ```
 python -m python_magnetworkflows.cli \
@@ -46,3 +63,5 @@ python -m python_magnetworkflows.cli \
             "M9Bitters":{"value":31000,"type":"bitter","filter":"M9Bitters_","flow":"tmp/M9Bitters_HLtest/M9Bitters-flow_params.json"}}' \
   tmp/M9Bitters_HLtest/M9Bitters_HLtest-cfpdes-thelec-Axi-sim.cfg
 ```
+
+It must converge in 2 iterations
