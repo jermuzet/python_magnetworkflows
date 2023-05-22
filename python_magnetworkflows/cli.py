@@ -78,6 +78,8 @@ def main():
         jsonmodel = feelpp_config["cfpdes"]["filename"]
         basedir = os.path.dirname(args.cfgfile)
         print(f"basedir={basedir}")
+        if not basedir:
+            basedir = "."
         jsonmodel = jsonmodel.replace(r"$cfgdir/", f"{basedir}/")
         print(f"jsonmodel={jsonmodel}")
 
