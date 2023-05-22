@@ -48,6 +48,30 @@ def create_field(
     print("create_field: done")
 
 
+def create_field_init(jsonmodel: str, meshmodel: str):
+    """
+    create and save a field in h5"""
+    print("create_field")
+
+    # TODO: pass space and order in method params
+    m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
+    Xh = fpp.functionSpace(space="Pch", mesh=m2d, order=1)
+    usave = Xh.element()
+
+    basedir = os.path.dirname(jsonmodel)
+    with open(jsonmodel, "r") as file:
+        data = json.load(file)
+        for param in data["Parameters"]:
+            if param.startswith("U_"):
+                value = data["Parameters"][param]
+                usave.on(
+                    range=fpp.markedelements(m2d, param[2:]), expr=fpp.expr(str(value))
+                )
+
+    usave.save(basedir, name="U")
+    print("create_field: done")
+
+
 def update(jsonmodel: str, parameters: dict):
     """
     Update jsonmodel with parameters
@@ -66,13 +90,15 @@ def update(jsonmodel: str, parameters: dict):
 
 
 # TODO create toolboxes_options on the fly
-def init(args, directory: str = ""):
+def init(args, jsonmodel: str, meshmodel: str, directory: str = ""):
     print(f"init: pwd={os.getcwd()}")
     e = fpp.Environment(
         ["cli.py"],
         opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
         config=fpp.localRepository(directory),
     )
+    create_field_init(jsonmodel, meshmodel)
+
     e.setConfigFile(args.cfgfile)
 
     if e.isMasterRank():
@@ -89,7 +115,13 @@ def init(args, directory: str = ""):
 
 
 def solve(
-    feelpp_directory, jsonmodel, args, targets: dict, params: dict, parameters: dict
+    feelpp_directory,
+    jsonmodel,
+    meshmodel,
+    args,
+    targets: dict,
+    params: dict,
+    parameters: dict,
 ):
     """
 
@@ -107,15 +139,6 @@ def solve(
 
     basedir = os.path.dirname(jsonmodel)  # get absolute path instead??
     print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}")
-    # save original U.h5
-    save_h5 = f"{basedir}/U.h5.init"
-    if os.path.isfile(save_h5):
-        raise RuntimeError(
-            f"solve: backup U.h5 to {save_h5} - fails since file already exists"
-        )
-    else:
-        # Rename the file
-        shutil.copy2(f"{basedir}/U.h5", save_h5)
 
     # save original jsonmodel
     save_json = f"{jsonmodel}.init"
@@ -142,7 +165,18 @@ def solve(
     # usave = Xh.element()
     output_df = {}
 
-    (e, f) = init(args, directory=feelpp_directory)
+    (e, f) = init(args, jsonmodel, meshmodel, directory=feelpp_directory)
+
+    # save original U.h5
+    save_h5 = f"{basedir}/U.h5.init"
+    if os.path.isfile(save_h5):
+        raise RuntimeError(
+            f"solve: backup U.h5 to {save_h5} - fails since file already exists"
+        )
+    else:
+        # Rename the file
+        shutil.copy2(f"{basedir}/U.h5", save_h5)
+
     while it < args.itermax:
         print(f"make a copy of files for it={it}")
         new_json = jsonmodel.replace(".json", f"-it{it}-{post[:-1]}.json")

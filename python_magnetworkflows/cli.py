@@ -69,19 +69,25 @@ def main():
 
     # Load cfg as config
     jsonmodel = ""
+    meshmodel = ""
     feelpp_config = configparser.ConfigParser()
     with open(args.cfgfile, "r") as inputcfg:
         feelpp_config.read_string("[DEFAULT]\n[main]\n" + inputcfg.read())
         feelpp_directory = feelpp_config["main"]["directory"]
         print(f"feelpp_directory={feelpp_directory}")
 
-        jsonmodel = feelpp_config["cfpdes"]["filename"]
         basedir = os.path.dirname(args.cfgfile)
         print(f"basedir={basedir}")
         if not basedir:
             basedir = "."
+
+        jsonmodel = feelpp_config["cfpdes"]["filename"]
         jsonmodel = jsonmodel.replace(r"$cfgdir/", f"{basedir}/")
         print(f"jsonmodel={jsonmodel}")
+
+        meshmodel = feelpp_config["cfpdes"]["mesh.filename"]
+        meshmodel = meshmodel.replace(r"$cfgdir/", f"{basedir}/")
+        print(f"meshmodel={meshmodel}")
 
     # Get Parameters from JSON model file
     parameters = {}
@@ -243,7 +249,7 @@ def main():
     
     """
 
-    oneconfig(feelpp_directory, jsonmodel, args, targets, parameters)
+    oneconfig(feelpp_directory, jsonmodel, meshmodel, args, targets, parameters)
 
     return 0
 

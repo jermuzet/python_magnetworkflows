@@ -18,7 +18,9 @@ from .solver import solve
 # from ..units import load_units
 
 
-def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict):
+def oneconfig(
+    feelpp_directory, jsonmodel, meshmodel, args, targets: dict, parameters: dict
+):
     """
     Run a simulation until currents are reached
 
@@ -49,7 +51,13 @@ def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict
             params[key] += tmp
 
     results = solve(
-        feelpp_directory, f"{pwd}/{jsonmodel}", args, targets, params, parameters
+        feelpp_directory,
+        f"{pwd}/{jsonmodel}",
+        f"{pwd}/{meshmodel}",
+        args,
+        targets,
+        params,
+        parameters,
     )
 
     # update
