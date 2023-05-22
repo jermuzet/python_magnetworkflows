@@ -48,10 +48,7 @@ def create_field(
     print("create_field: done")
 
 
-def update(
-    jsonmodel: str,
-    parameters: dict,
-):
+def update(jsonmodel: str, parameters: dict):
     """
     Update jsonmodel with parameters
     """
@@ -113,7 +110,7 @@ def solve(
     # save original U.h5
     save_h5 = f"{basedir}/U.h5.init"
     if os.path.isfile(save_h5):
-        RuntimeError(
+        raise RuntimeError(
             f"solve: backup U.h5 to {save_h5} - fails since file already exists"
         )
     else:
@@ -123,7 +120,7 @@ def solve(
     # save original jsonmodel
     save_json = f"{jsonmodel}.init"
     if os.path.isfile(save_json):
-        RuntimeError(
+        raise RuntimeError(
             f"solve: backup jsonmodel to {save_json} - fails since file already exists"
         )
     else:
