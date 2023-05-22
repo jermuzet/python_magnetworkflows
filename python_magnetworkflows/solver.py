@@ -104,7 +104,7 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
     # save original U.h5
     save_h5 = f'{basedir}/U.h5.init'
     if os.path.isfile(save_h5):
-        RuntimeError(f'solve: backup U.h5 to {save_h5} - fails since file already exists')
+        raise RuntimeError(f'solve: backup U.h5 to {save_h5} - fails since file already exists')
     else:
         # Rename the file
         shutil.copy2(f'{basedir}/U.h5', save_h5)
@@ -112,7 +112,7 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
     # save original jsonmodel
     save_json = f'{jsonmodel}.init'
     if os.path.isfile(save_json):
-        RuntimeError(f'solve: backup jsonmodel to {save_json} - fails since file already exists')
+        raise RuntimeError(f'solve: backup jsonmodel to {save_json} - fails since file already exists')
     else:
         # Rename the file
         shutil.copy2(jsonmodel, save_json)
