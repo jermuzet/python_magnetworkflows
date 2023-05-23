@@ -340,9 +340,8 @@ def solve(
                 parameters[p_params["dTw"][i]] = dTg
 
             if e.isMasterRank():
-                print(
-                    f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={Power}, dTg={dTg}'
-                )
+
+                print(f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={Power}, dTg={dTg}, hg={hg}')
 
             # per Channel/Slit
             if args.debug and e.isMasterRank():
@@ -358,7 +357,7 @@ def solve(
                 parameters[p_params["dTwH"][i]] = dTwi
                 if e.isMasterRank():
                     print(
-                        f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, Tw={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi}'
+                        f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, Tw={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi}, hi={hi}'
                     )
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
@@ -406,5 +405,8 @@ def solve(
         df = pd.DataFrame(table, columns = headers)
         df.to_csv(resfile, encoding='utf-8')
     """
+    
+    os.remove(save_h5)
+    os.remove(save_json)
 
     return output_df

@@ -26,12 +26,29 @@
 	// Uncomment the next line to run commands after the container is created.
 	// "postCreateCommand": "gcc -v",
 
+// Use 'settings' to set *default* container specific settings.json values on container create. 
+	// You can edit these settings after create using File > Preferences > Settings > Remote.
+	"customizations": {
+		"settings": {
+			"terminal.integrated.defaultProfile.linux": "bash",
+			"python.defaultInterpreterPath": "/usr/bin/python",
+			"python.formatting.autopep8Path": "/usr/bin/autopep8",
+			"python.formatting.blackPath": "/usr/bin/black",
+			"python.formatting.yapfPath": "/usr/bin/yapf3",
+			"python.linting.banditPath": "/usr/bin/bandit",
+			"python.linting.flake8Path": "/usr/bin/flake8",
+			"python.linting.mypyPath": "/usr/bin/mypy",
+			"python.linting.pycodestylePath": "/usr/bin/pycodestyle",
+			"python.linting.pydocstylePath": "/usr/bin/pydocstyle",
+			"python.linting.pylintPath": "/usr/bin/pylint",
+			"python.testing.pytestPath": "/usr/bin/pytest-3"
+		},
+		"extensions": [
+		    "ms-python.python",
+		    "ms-python.vscode-pylance",
+		    "ms-python.black-formatter"
+		]
+	},
 	// Comment out the next line if you want to run as root instead
 	"remoteUser": "vscode",
-
-	// Add the IDs of extensions you want installed when the container is created in the array below.
-	"extensions": [
-		"ms-python.python",
-		"ms-python.vscode-pylance"
-	]
 }
