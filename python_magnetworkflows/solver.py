@@ -53,7 +53,6 @@ def create_field_init(jsonmodel: str, meshmodel: str):
     create and save a field in h5"""
     print("create_field")
 
-    # TODO: pass space and order in method params
     m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
     Xh = fpp.functionSpace(space="Pch", mesh=m2d, order=1)
     usave = Xh.element()
@@ -124,7 +123,6 @@ def solve(
     parameters: dict,
 ):
     """
-
     targets: dict of target
     params: dict(target, params:list of parameters name)
     """
@@ -150,6 +148,18 @@ def solve(
         # Rename the file
         shutil.copy2(jsonmodel, save_json)
 
+    (e, f) = init(args, jsonmodel, meshmodel, directory=feelpp_directory)
+
+    # save original U.h5
+    save_h5 = f"{basedir}/U.h5.init"
+    if os.path.isfile(save_h5):
+        raise RuntimeError(
+            f"solve: backup U.h5 to {save_h5} - fails since file already exists"
+        )
+    else:
+        # Rename the file
+        shutil.copy2(f"{basedir}/U.h5", save_h5)
+
     it = 0
     err_max = 10 * args.eps
 
@@ -164,18 +174,6 @@ def solve(
     # Xh = fpp.functionSpace(space="Pch", mesh=f.mesh(), order=1)
     # usave = Xh.element()
     output_df = {}
-
-    (e, f) = init(args, jsonmodel, meshmodel, directory=feelpp_directory)
-
-    # save original U.h5
-    save_h5 = f"{basedir}/U.h5.init"
-    if os.path.isfile(save_h5):
-        raise RuntimeError(
-            f"solve: backup U.h5 to {save_h5} - fails since file already exists"
-        )
-    else:
-        # Rename the file
-        shutil.copy2(f"{basedir}/U.h5", save_h5)
 
     while it < args.itermax:
         print(f"make a copy of files for it={it}")
