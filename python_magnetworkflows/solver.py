@@ -17,10 +17,13 @@ from .params import getTarget, getparam
 from .waterflow import waterflow as w
 from .real_methods import getDT, getHeatCoeff
 
-def create_field(feel_pb, targets: dict, parameters: dict, wd: str, debug: bool = False):
+
+def create_field(
+    feel_pb, targets: dict, parameters: dict, wd: str, debug: bool = False
+):
     """
     create and save a field in h5"""
-    print('create_field')
+    print("create_field")
 
     # TODO: pass space and order in method params
     Xh = fpp.functionSpace(space="Pch", mesh=feel_pb.mesh(), order=1)
@@ -28,27 +31,51 @@ def create_field(feel_pb, targets: dict, parameters: dict, wd: str, debug: bool 
 
     for target, values in targets.items():
         params = []
-        for p in values['control_params']:
+        for p in values["control_params"]:
             tmp = getparam(p[0], parameters, p[1], debug)
             params += tmp
 
         for param in params:
-            marker = param.replace('U_','') # 'U_': (values['control_params'][0])[0]
+            marker = param.replace("U_", "")  # 'U_': (values['control_params'][0])[0]
             # print(f'marker: {marker}, goal={values["goals"][marker].iloc[-1]} xx')
             value = float(parameters[param])
-            usave.on(range=fpp.markedelements(feel_pb.mesh(), marker), expr=fpp.expr(str(value)))
+            usave.on(
+                range=fpp.markedelements(feel_pb.mesh(), marker),
+                expr=fpp.expr(str(value)),
+            )
 
-    usave.save(wd, name='U')
-    print('create_field: done')
+    usave.save(wd, name="U")
+    print("create_field: done")
 
-def update(
-    jsonmodel: str,
-    parameters: dict,
-):
+
+def create_field_init(jsonmodel: str, meshmodel: str):
+    """
+    create and save a field in h5"""
+    print("create_field")
+
+    m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
+    Xh = fpp.functionSpace(space="Pch", mesh=m2d, order=1)
+    usave = Xh.element()
+
+    basedir = os.path.dirname(jsonmodel)
+    with open(jsonmodel, "r") as file:
+        data = json.load(file)
+        for param in data["Parameters"]:
+            if param.startswith("U_"):
+                value = data["Parameters"][param]
+                usave.on(
+                    range=fpp.markedelements(m2d, param[2:]), expr=fpp.expr(str(value))
+                )
+
+    usave.save(basedir, name="U")
+    print("create_field: done")
+
+
+def update(jsonmodel: str, parameters: dict):
     """
     Update jsonmodel with parameters
     """
-    print(f'update {jsonmodel}')
+    print(f"update {jsonmodel}")
 
     dict_json = {}
     with open(jsonmodel, "r") as jsonfile:
@@ -62,13 +89,15 @@ def update(
 
 
 # TODO create toolboxes_options on the fly
-def init(args, directory: str = ""):
+def init(args, jsonmodel: str, meshmodel: str, directory: str = ""):
     print(f"init: pwd={os.getcwd()}")
     e = fpp.Environment(
         ["cli.py"],
         opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
         config=fpp.localRepository(directory),
     )
+    create_field_init(jsonmodel, meshmodel)
+
     e.setConfigFile(args.cfgfile)
 
     if e.isMasterRank():
@@ -79,43 +108,57 @@ def init(args, directory: str = ""):
         print("Init problem")
     f.init()
     # f.printAndSaveInfo()
-    
+
     print(f"init: done")
     return (e, f)
 
 
-def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parameters: dict):
+def solve(
+    feelpp_directory,
+    jsonmodel,
+    meshmodel,
+    args,
+    targets: dict,
+    params: dict,
+    parameters: dict,
+):
     """
-
     targets: dict of target
     params: dict(target, params:list of parameters name)
     """
 
     # if args.debug:
     print(f"solve: jsonmodel={jsonmodel}, args={args}")
-    
+
     # suffix of tmp files
     post = ""
     for target, values in targets.items():
         post += f'{target}={values["objectif"]}{values["unit"]}-'
 
-    basedir = os.path.dirname(jsonmodel) # get absolute path instead??
+    basedir = os.path.dirname(jsonmodel)  # get absolute path instead??
     print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}")
-    # save original U.h5
-    save_h5 = f'{basedir}/U.h5.init'
-    if os.path.isfile(save_h5):
-        raise RuntimeError(f'solve: backup U.h5 to {save_h5} - fails since file already exists')
-    else:
-        # Rename the file
-        shutil.copy2(f'{basedir}/U.h5', save_h5)
 
     # save original jsonmodel
-    save_json = f'{jsonmodel}.init'
+    save_json = f"{jsonmodel}.init"
     if os.path.isfile(save_json):
-        raise RuntimeError(f'solve: backup jsonmodel to {save_json} - fails since file already exists')
+        raise RuntimeError(
+            f"solve: backup jsonmodel to {save_json} - fails since file already exists"
+        )
     else:
         # Rename the file
         shutil.copy2(jsonmodel, save_json)
+
+    (e, f) = init(args, jsonmodel, meshmodel, directory=feelpp_directory)
+
+    # save original U.h5
+    save_h5 = f"{basedir}/U.h5.init"
+    if os.path.isfile(save_h5):
+        raise RuntimeError(
+            f"solve: backup U.h5 to {save_h5} - fails since file already exists"
+        )
+    else:
+        # Rename the file
+        shutil.copy2(f"{basedir}/U.h5", save_h5)
 
     it = 0
     err_max = 10 * args.eps
@@ -132,24 +175,24 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
     # usave = Xh.element()
     output_df = {}
 
-    (e, f) = init(args, directory=feelpp_directory)
     while it < args.itermax:
-
-        print(f'make a copy of files for it={it}')
-        new_json = jsonmodel.replace('.json',f'-it{it}-{post[:-1]}.json')
-        print(f'jsonmodel={jsonmodel}, new_json={new_json}')
+        print(f"make a copy of files for it={it}")
+        new_json = jsonmodel.replace(".json", f"-it{it}-{post[:-1]}.json")
+        print(f"jsonmodel={jsonmodel}, new_json={new_json}")
         # shutil.copy2(jsonmodel, new_json)
         dict_json = {}
         with open(jsonmodel, "r") as jsonfile:
             dict_json = json.loads(jsonfile.read())
-            dict_json["Meshes"]["cfpdes"]["Fields"]["U"]["filename"] = f'$cfgdir/U-it{it}.h5'
+            dict_json["Meshes"]["cfpdes"]["Fields"]["U"][
+                "filename"
+            ] = f"$cfgdir/U-it{it}.h5"
             # print(f'dict_json={dict_json}')
         with open(new_json, "w+") as jsonfile:
             jsonfile.write(json.dumps(dict_json, indent=4))
 
-        shutil.copy2(f'{basedir}/U.h5', f'{basedir}/U-it{it}.h5')
+        shutil.copy2(f"{basedir}/U.h5", f"{basedir}/U-it{it}.h5")
 
-        print(f'start calc for it={it}')
+        print(f"start calc for it={it}")
         if args.debug and e.isMasterRank():
             print("Parameters:", f.modelProperties().parameters())
 
@@ -166,7 +209,7 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
         table_ = [it]
         err_max = 0
         for target, values in targets.items():
-            objectif = -values["objectif"]  
+            objectif = -values["objectif"]
             # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
             filtered_df = getTarget(targets, target, e, args.debug)
 
@@ -177,11 +220,13 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
             table_.append(err_max_target)
             err_max = max(err_max_target, err_max)
 
-            print(f'{target}: objectif={objectif}')
-            print(f'{target}: filtered_df={filtered_df}')
-            print(f'{target}: error={error}')
-            print(f'{target}: it={it}, err_max={err_max_target}, eps={args.eps}, itmax={args.itermax}')
-            
+            print(f"{target}: objectif={objectif}")
+            print(f"{target}: filtered_df={filtered_df}")
+            print(f"{target}: error={error}")
+            print(
+                f"{target}: it={it}, err_max={err_max_target}, eps={args.eps}, itmax={args.itermax}"
+            )
+
             for param in params[target]:
                 marker = param.replace(
                     "U_", ""
@@ -190,7 +235,9 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
                 ovalue = float(parameters[param])
                 table_.append(ovalue)
                 nvalue = ovalue * objectif / val
-                print(f'{it}: {marker}, goal={objectif}, val={val}, err={error[marker].iloc[-1]}, ovalue={ovalue}, nvalue={nvalue}')
+                print(
+                    f"{it}: {marker}, goal={objectif}, val={val}, err={error[marker].iloc[-1]}, ovalue={ovalue}, nvalue={nvalue}"
+                )
                 f.addParameterInModelProperties(param, nvalue)
                 parameters[param] = nvalue
 
@@ -236,7 +283,6 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
                             p_params[pname] += tmp
                         else:
                             p_params[pname] = tmp
-
             output_df[target] = p_df
             if args.debug and e.isMasterRank():
                 print(f"p_df: {p_df.keys()}")
@@ -275,10 +321,14 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
 
             # TODO verify if data are consistant??
             if e.isMasterRank():
-                print(f'{target}: len(Dh)={len(Dh)}, len(TwH)={len(TwH)}, len(dTwH)={len(dTwH)}, len(Channels/Slits)={len(hwH)}')
+                print(
+                    f"{target}: len(Dh)={len(Dh)}, len(TwH)={len(TwH)}, len(dTwH)={len(dTwH)}, len(Channels/Slits)={len(hwH)}"
+                )
             Umean = flow.umean(abs(objectif), sum(Sh))  # math.fsum(Sh)
             if e.isMasterRank():
-                print(f"{target}: it={it}, objectif={abs(objectif)}, Umean={Umean}, Flow={flow}")
+                print(
+                    f"{target}: it={it}, objectif={abs(objectif)}, Umean={Umean}, Flow={flow}"
+                )
 
             # global:  what to do when len(Tw) != 1
             for i, T in enumerate(Tw):
@@ -290,6 +340,7 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
                 parameters[p_params["dTw"][i]] = dTg
 
             if e.isMasterRank():
+
                 print(f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={Power}, dTg={dTg}, hg={hg}')
 
             # per Channel/Slit
@@ -323,7 +374,6 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
         create_field(f, targets, parameters, basedir, args.debug)
         update(jsonmodel, parameters)
 
- 
         if err_max <= args.eps:
             break
 
@@ -339,7 +389,7 @@ def solve(feelpp_directory, jsonmodel, args, targets: dict, params: dict, parame
         print(tabulate(table, headers, tablefmt="simple"))
 
     if err_max > args.eps or it >= args.itermax:
-        raise RuntimeError(f'Fail to solve {jsonmodel}: err_max={err_max}, it={it}')
+        raise RuntimeError(f"Fail to solve {jsonmodel}: err_max={err_max}, it={it}")
     """
     results = {}
     legend = ""

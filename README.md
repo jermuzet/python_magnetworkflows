@@ -52,7 +52,7 @@ Edit 'tmp/M9Bitters_HLtest/M9Bitters_HLtest-cfpdes-thelec-Axi-sim.json' and modi
 Then create a initial U.h5 file:
 
 ```
-python -m python_magnetworkflows.create_U --cfgfile tmp/M9Bitters_HLtest/M9Bitters_HLtest-cfpdes-thelec-Axi-sim.cfg --odir tmp/M9Bitters_HLtest
+python -m python_magnetworkflows.create_U tmp/M9Bitters_HLtest/M9Bitters_HLtest-cfpdes-thelec-Axi-sim.cfg
 ```
 
 Run the workflow:

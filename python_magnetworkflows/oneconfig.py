@@ -18,7 +18,9 @@ from .solver import solve
 # from ..units import load_units
 
 
-def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict):
+def oneconfig(
+    feelpp_directory, jsonmodel, meshmodel, args, targets: dict, parameters: dict
+):
     """
     Run a simulation until currents are reached
 
@@ -36,9 +38,7 @@ def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict
     for target, values in targets.items():
         print(f"{target}: {values['objectif']}")
         table_values.append(float(values["objectif"]))
-        table_headers.append(
-            f'{target}[{values["unit"]}]'
-        )
+        table_headers.append(f'{target}[{values["unit"]}]')
 
     # capture actual params per target:
     params = {}
@@ -51,7 +51,13 @@ def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict
             params[key] += tmp
 
     results = solve(
-        feelpp_directory, f"{pwd}/{jsonmodel}", args, targets, params, parameters
+        feelpp_directory,
+        f"{pwd}/{jsonmodel}",
+        f"{pwd}/{meshmodel}",
+        args,
+        targets,
+        params,
+        parameters,
     )
 
     # update
@@ -62,7 +68,7 @@ def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict
         dict_df = {}
         
         (name, value, params, control_params, bc_params, targets, pfields, postvalues, pvalues) = objectif
-        update(cwd, jsonmodel, params, control_params, bc_params, value, args.debug)
+        jsonmodel=update(cwd, name, jsonmodel, params, control_params, bcparams, value, args.debug)
         if args.debug and feelpp_env.isMasterRank():
             print(f'bcparams[{name}]: {bcparams[name]}')
         # print(f'params: {params}')
@@ -168,7 +174,7 @@ def oneconfig(feelpp_directory, jsonmodel, args, targets: dict, parameters: dict
 
         # Stress, VonMises stats
         if postvalues['Stress'][0] in dict_df:
-            _Stress_df = pd.concat([dict_df[p] for p in postValues['Stress']], sort=True)
+            _Stress_df = pd.concat([dict_df[p] for p in postvalues['Stress']], sort=True)
             for p in postvalues["Stress"]:
                 _Stress_df.rename(index={f"{p}[{unit}]": f"{p}[{unit}]"}, inplace=True)
             if feelpp_env.isMasterRank():
