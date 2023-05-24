@@ -311,53 +311,69 @@ def solve(
                 print(f'Dh: {p_params["Dh"]}')
                 print(f'hwH: {p_params["h"]}')
 
-            Tw = [float(parameters[p]) for p in p_params["Tw"]]
-            dTw = [float(parameters[p]) for p in p_params["dTw"]]
-            hw = [float(parameters[p]) for p in p_params["hw"]]
-
-            TwH = [float(parameters[p]) for p in p_params["TwH"]]
-            dTwH = [float(parameters[p]) for p in p_params["dTwH"]]
-            hwH = [float(parameters[p]) for p in p_params["h"]]
-
-            # TODO verify if data are consistant??
-            if e.isMasterRank():
-                print(
-                    f"{target}: len(Dh)={len(Dh)}, len(TwH)={len(TwH)}, len(dTwH)={len(dTwH)}, len(Channels/Slits)={len(hwH)}"
-                )
             Umean = flow.umean(abs(objectif), sum(Sh))  # math.fsum(Sh)
             if e.isMasterRank():
                 print(
                     f"{target}: it={it}, objectif={abs(objectif)}, Umean={Umean}, Flow={flow}"
                 )
 
-            # global:  what to do when len(Tw) != 1
-            for i, T in enumerate(Tw):
-                dTg = getDT(abs(objectif), flow, Power, Tw[i], Pressure)
-                hg = getHeatCoeff(flow, sum(Dh) / float(len(Dh)), Umean, Tw[i])
-                f.addParameterInModelProperties(p_params["dTw"][i], dTg)
-                f.addParameterInModelProperties(p_params["hw"][i], hg)
-                parameters[p_params["hw"][i]] = hg
-                parameters[p_params["dTw"][i]] = dTg
-
-            if e.isMasterRank():
-
-                print(f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={Power}, dTg={dTg}, hg={hg}')
-
             # per Channel/Slit
-            if args.debug and e.isMasterRank():
-                print(f'{target} Flux: {p_df["Flux"]}')
-            for i, (d, s) in enumerate(zip(Dh, Sh)):
-                cname = p_params["Dh"][i].replace("_Dh", "")
-                PowerCh = p_df["Flux"].iloc[-1, i]
-                dTwi = getDT(abs(objectif), flow, PowerCh, TwH[i], Pressure)
-                hi = getHeatCoeff(flow, d, Umean, TwH[i])
-                f.addParameterInModelProperties(p_params["dTwH"][i], dTwi)
-                f.addParameterInModelProperties(p_params["h"][i], hi)
-                parameters[p_params["h"][i]] = hi
-                parameters[p_params["dTwH"][i]] = dTwi
+            if "H" in args.cooling:
+                TwH = [float(parameters[p]) for p in p_params["TwH"]]
+                dTwH = [float(parameters[p]) for p in p_params["dTwH"]]
+                hwH = [float(parameters[p]) for p in p_params["h"]]
+
+                # TODO verify if data are consistant??
                 if e.isMasterRank():
                     print(
-                        f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, Tw={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi}, hi={hi}'
+                        f"{target}: len(Dh)={len(Dh)}, len(TwH)={len(TwH)}, len(dTwH)={len(dTwH)}, len(Channels/Slits)={len(hwH)}"
+                    )
+                    print(f'{target} Flux: {p_df["Flux"]}')
+
+                dTwi = []
+                hi = []
+                dTg = 0
+                for i, (d, s) in enumerate(zip(Dh, Sh)):
+                    cname = p_params["Dh"][i].replace("_Dh", "")
+                    PowerCh = p_df["Flux"].iloc[-1, i]
+                    dTwi.append(getDT(abs(objectif), flow, PowerCh, TwH[i], Pressure))
+                    hi.append(getHeatCoeff(flow, d, Umean, TwH[i]))
+                    f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
+                    f.addParameterInModelProperties(p_params["h"][i], hi[-1])
+                    parameters[p_params["h"][i]] = hi[-1]
+                    parameters[p_params["dTwH"][i]] = dTwi
+                    if e.isMasterRank():
+                        print(
+                            f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi[i]}, hi={hi[i]}'
+                        )
+
+                    rho = flow.rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
+                    Cp = flow.Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
+                    dTg += (TwH[i] + dTwi[-1]) * rho * Cp * (Umean * s)
+
+                # TODO compute an estimate of dTg
+                dTg /= rho * Cp * (Umean * sum(Sh))
+                dTg -= TwH[0]
+                if e.isMasterRank():
+                    print(f"{target} Channel{i}: cname={cname}, Tw={TwH[0]}, dTg={dTg}")
+
+            # global:  what to do when len(Tw) != 1
+            else:
+                Tw = [float(parameters[p]) for p in p_params["Tw"]]
+                dTw = [float(parameters[p]) for p in p_params["dTw"]]
+                hw = [float(parameters[p]) for p in p_params["hw"]]
+
+                for i, T in enumerate(Tw):
+                    dTg = getDT(abs(objectif), flow, Power, Tw[i], Pressure)
+                    hg = getHeatCoeff(flow, sum(Dh) / float(len(Dh)), Umean, Tw[i])
+                    f.addParameterInModelProperties(p_params["dTw"][i], dTg)
+                    f.addParameterInModelProperties(p_params["hw"][i], hg)
+                    parameters[p_params["hw"][i]] = hg
+                    parameters[p_params["dTw"][i]] = dTg
+
+                if e.isMasterRank():
+                    print(
+                        f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={Power}, dTg={dTg}, hg={hg}'
                     )
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
@@ -405,8 +421,8 @@ def solve(
         df = pd.DataFrame(table, columns = headers)
         df.to_csv(resfile, encoding='utf-8')
     """
-    
+
     os.remove(save_h5)
     os.remove(save_json)
 
-    return output_df
+    return (table, output_df)
