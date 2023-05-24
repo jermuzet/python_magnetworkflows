@@ -50,7 +50,7 @@ def oneconfig(
             tmp = getparam(p[0], parameters, p[1], args.debug)
             params[key] += tmp
 
-    results = solve(
+    (table, results) = solve(
         feelpp_directory,
         f"{pwd}/{jsonmodel}",
         f"{pwd}/{meshmodel}",
@@ -59,6 +59,12 @@ def oneconfig(
         params,
         parameters,
     )
+
+    for target, values in results.items():
+        print(f"result for {target}:")
+        for key, df in values.items():
+            print(f"\t{key}")
+            df.to_markdown(headers="keys", tablefmt="psql")
 
     # update
     """
