@@ -63,8 +63,10 @@ def oneconfig(
     for target, values in results.items():
         print(f"result for {target}:")
         for key, df in values.items():
-            print(f"\t{key}")
-            df.to_markdown(headers="keys", tablefmt="psql")
+            print(f"\t{key}:")
+            if isinstance(df, pd.DataFrame):
+                print(df)
+                # df.to_markdown(tablefmt="psql") # requires pqndqs >= 1.0.0
 
     # update
     """
