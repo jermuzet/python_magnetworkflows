@@ -15,6 +15,7 @@ import pandas as pd
 
 from .params import getTarget, getparam
 from .waterflow import waterflow as w
+from .waterflow import rho, Cp
 from .real_methods import getDT, getHeatCoeff
 
 
@@ -289,13 +290,14 @@ def solve(
                 print(f"p_params: {p_params.keys()}")
                 print(f'p_params[Tw]={p_params["Tw"]}')
 
-            Power = p_df["Power"].iloc[-1, 0]
+            print("PowerM : ", p_df["PowerM"])
+            PowerM = p_df["PowerM"].iloc[-1, 0]
             SPower_H = p_df["PowerH"].iloc[-1].sum()
             SFlux_H = p_df["Flux"].iloc[-1].sum()
             if e.isMasterRank():
                 print(f'{target}: PowerH {p_df["PowerH"]}')
                 print(
-                    f'{target}: it={it} Power={Power} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={p_df["PowerH"].iloc[-1]}'
+                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={p_df["PowerH"].iloc[-1]}'
                 )
 
                 if args.debug:
@@ -341,18 +343,18 @@ def solve(
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                     f.addParameterInModelProperties(p_params["h"][i], hi[-1])
                     parameters[p_params["h"][i]] = hi[-1]
-                    parameters[p_params["dTwH"][i]] = dTwi
+                    parameters[p_params["dTwH"][i]] = dTwi[-1]
                     if e.isMasterRank():
                         print(
                             f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi[i]}, hi={hi[i]}'
                         )
 
-                    rho = flow.rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    Cp = flow.Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    dTg += (TwH[i] + dTwi[-1]) * rho * Cp * (Umean * s)
+                    VolMass = rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
+                    SpecHeat = Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
+                    dTg += (TwH[i] + dTwi[-1]) * VolMass * SpecHeat * (Umean * s)
 
                 # TODO compute an estimate of dTg
-                dTg /= rho * Cp * (Umean * sum(Sh))
+                dTg /= VolMass * SpecHeat * (Umean * sum(Sh))
                 dTg -= TwH[0]
                 if e.isMasterRank():
                     print(f"{target} Channel{i}: cname={cname}, Tw={TwH[0]}, dTg={dTg}")
@@ -364,7 +366,7 @@ def solve(
                 hw = [float(parameters[p]) for p in p_params["hw"]]
 
                 for i, T in enumerate(Tw):
-                    dTg = getDT(abs(objectif), flow, Power, Tw[i], Pressure)
+                    dTg = getDT(abs(objectif), flow, PowerM, Tw[i], Pressure)
                     hg = getHeatCoeff(flow, sum(Dh) / float(len(Dh)), Umean, Tw[i])
                     f.addParameterInModelProperties(p_params["dTw"][i], dTg)
                     f.addParameterInModelProperties(p_params["hw"][i], hg)
@@ -373,7 +375,7 @@ def solve(
 
                 if e.isMasterRank():
                     print(
-                        f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={Power}, dTg={dTg}, hg={hg}'
+                        f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={PowerM}, dTg={dTg}, hg={hg}'
                     )
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
