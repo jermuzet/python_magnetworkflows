@@ -104,17 +104,17 @@ def main():
             filter = values["filter"]
             if values["type"] == "helix":
                 # change rematch, params, control_params
-                Power = {
-                    "name": "Power",
+                PowerM = {
+                    "name": "PowerM",
                     "csv": "heat.measures/values.csv",
-                    "rematch": f"Statistics_Power_{filter}integrate",
+                    "rematch": f"Statistics_PowerM_{filter}\\w+integrate",
                     "post": {"type": "Statistics_Power", "math": "integrate"},
                     "unit": "W",
                 }
                 PowerH = {
-                    "csv": "heat.measures/values.csv",
-                    "rematch": f"Statistics_Power_{filter}\\w+_integrate",
                     "name": "PowerH",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Power_{filter}H\\d+_Cu\\d+_integrate",
                     "post": {"type": "Statistics_Power", "math": "integrate"},
                     "unit": "W",
                 }
@@ -133,7 +133,7 @@ def main():
                         ("Dh", f"{filter}Dh\\d+"),
                         ("Sh", f"{filter}Sh\\d+"),
                         ("hw", f"{filter}hw"),
-                        ("h", f"{filter}h\\d+"),
+                        ("h", f"{filter}hw\\d+"),
                     ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
@@ -157,7 +157,7 @@ def main():
                     "rematch": f"Statistics_Intensity_{filter}H\\w+_integrate",
                     "params": [("N", f"N_{filter}\\w+")],
                     "control_params": [(f"{filter}U", f"U_{filter}\\w+")],
-                    "computed_params": [HeatCoeff, DT, Flux, Power, PowerH],
+                    "computed_params": [HeatCoeff, DT, Flux, PowerM, PowerH],
                     "unit": "A",
                     "name": f"Intensity_{filter}",
                     "post": {"type": "Statistics_Intensity", "math": "integrate"},
@@ -166,17 +166,17 @@ def main():
 
             if values["type"] == "bitter":
                 # change rematch, params, control_params
-                Power = {
-                    "name": "Power",
+                PowerM = {
+                    "name": "PowerM",
                     "csv": "heat.measures/values.csv",
-                    "rematch": f"Statistics_Power_{filter}integrate",
+                    "rematch": f"Statistics_PowerM_{filter}\\w+integrate",
                     "post": {"type": "Statistics_Power", "math": "integrate"},
                     "unit": "W",
                 }
                 PowerH = {
                     "name": "PowerH",
                     "csv": "heat.measures/values.csv",
-                    "rematch": f"Statistics_Power_{filter}\\w+_integrate",
+                    "rematch": f"Statistics_Power_{filter}\\w+_B\\d+_integrate",
                     "post": {"type": "Statistics_Power", "math": "integrate"},
                     "unit": "W",
                 }
@@ -219,7 +219,7 @@ def main():
                     "rematch": f"Statistics_Intensity_{filter}\\w+_integrate",
                     "params": [("N", f"N_{filter}\\w+")],
                     "control_params": [(f"{filter}U", f"U_{filter}\\w+")],
-                    "computed_params": [HeatCoeff, DT, Flux, Power, PowerH],
+                    "computed_params": [HeatCoeff, DT, Flux, PowerM, PowerH],
                     "unit": "A",
                     "name": f"Intensity{filter}",
                     "post": {"type": "Statistics_Intensity", "math": "integrate"},
@@ -232,7 +232,7 @@ def main():
     # pvalues: dict for params key->actual target in targets
     pvalues = {
         "Flux" : "Flux",
-        "Power" : "Power",
+        "PowerM" : "PowerM",
         "PowerH" : "PowerH",
         "HeatCoeff" : "HeatCoeff",
         "DT" : "DT"
