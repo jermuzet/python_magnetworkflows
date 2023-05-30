@@ -334,7 +334,7 @@ def solve(
 
                 dTwi = []
                 hi = []
-                dTg = 0
+                Tout = 0
                 for i, (d, s) in enumerate(zip(Dh, Sh)):
                     cname = p_params["Dh"][i].replace("_Dh", "")
                     PowerCh = p_df["Flux"].iloc[-1, i]
@@ -351,13 +351,13 @@ def solve(
 
                     VolMass = rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
                     SpecHeat = Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    dTg += TwH[i] * VolMass * SpecHeat * (Umean * s)
+                    Tout += (TwH[i] + dTwi[-1]) * VolMass * SpecHeat * (Umean * s)
 
                 # TODO compute an estimate of dTg
-                dTg /= VolMass * SpecHeat * (Umean * sum(Sh))
-                dTg -= TwH[0]
+                Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
+                dTg = Tout - TwH[0]
                 if e.isMasterRank():
-                    print(f"{target} Tout: cname={cname}, Tw={TwH[0]}, dTg={dTg}")
+                    print(f"{target} Tout={Tout}, Tw={TwH[0]}, dTg={dTg}")
 
             # global:  what to do when len(Tw) != 1
             else:
