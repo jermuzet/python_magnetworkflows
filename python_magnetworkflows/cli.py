@@ -107,7 +107,7 @@ def main():
                 PowerM = {
                     "name": "PowerM",
                     "csv": "heat.measures/values.csv",
-                    "rematch": f"Statistics_PowerM_{filter}\\w+integrate",
+                    "rematch": f"Statistics_PowerM_{filter}\\w*integrate",
                     "post": {"type": "Statistics_Power", "math": "integrate"},
                     "unit": "W",
                 }
@@ -169,7 +169,7 @@ def main():
                 PowerM = {
                     "name": "PowerM",
                     "csv": "heat.measures/values.csv",
-                    "rematch": f"Statistics_PowerM_{filter}\\w+integrate",
+                    "rematch": f"Statistics_PowerM_{filter}\\w*integrate",
                     "post": {"type": "Statistics_Power", "math": "integrate"},
                     "unit": "W",
                 }
