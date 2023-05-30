@@ -114,6 +114,20 @@ def init(args, jsonmodel: str, meshmodel: str, directory: str = ""):
     return (e, f)
 
 
+def get_Tout(
+    TwH: List[float], dTwi: List[float], Pressure: float, Umean: float, Sh: List[float]
+) -> float:
+    Tout = 0
+    for i, s in enumerate(Sh):
+        VolMass = rho(TwH[i] + dTwi[i] / 2.0, Pressure)
+        SpecHeat = Cp(TwH[i] + dTwi[i] / 2.0, Pressure)
+        Tout += (TwH[i] + dTwi[i]) * VolMass * SpecHeat * (Umean * s)
+
+    rhoCpQ = VolMass * SpecHeat * (Umean * sum(Sh))
+    Tout /= rhoCpQ
+    return Tout, rhoCpQ
+
+
 def solve(
     feelpp_directory,
     jsonmodel,
@@ -209,6 +223,7 @@ def solve(
         # TODO: get csv to look for depends on cfpdes model used
         table_ = [it]
         err_max = 0
+        Touts = []
         for target, values in targets.items():
             objectif = -values["objectif"]
             # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
@@ -349,15 +364,18 @@ def solve(
                             f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi[i]}, hi={hi[i]}'
                         )
 
-                    VolMass = rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    SpecHeat = Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    Tout += (TwH[i] + dTwi[-1]) * VolMass * SpecHeat * (Umean * s)
+                    # VolMass = rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
+                    # SpecHeat = Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
+                    # Tout += (TwH[i] + dTwi[-1]) * VolMass * SpecHeat * (Umean * s)
 
                 # TODO compute an estimate of dTg
-                Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
+                # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
+                Tout, rhoCpQ = get_Tout(TwH, dTwi, Pressure, Umean, Sh)
                 dTg = Tout - TwH[0]
                 if e.isMasterRank():
                     print(f"{target} Tout={Tout}, Tw={TwH[0]}, dTg={dTg}")
+
+                Touts.append((Tout, rhoCpQ))
 
             # global:  what to do when len(Tw) != 1
             else:
@@ -379,6 +397,17 @@ def solve(
                     )
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
+
+        if "H" in args.cooling and len(Touts) > 1:
+            Tout_site = 0
+            rhoCpQ_site = 0
+            for Tout, rhoCpQ in Touts:
+                Tout_site += Tout * rhoCpQ
+                rhoCpQ_site += rhoCpQ
+            Tout_site /= rhoCpQ_site
+            dTg = Tout_site - TwH[0]
+            if e.isMasterRank():
+                print(f"MSITE Tout={Tout_site}, Tw={TwH[0]}, dTg={dTg}")
 
         # update Parameters
         f.updateParameterValues()
