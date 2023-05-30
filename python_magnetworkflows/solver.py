@@ -351,13 +351,13 @@ def solve(
 
                     VolMass = rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
                     SpecHeat = Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    dTg += (TwH[i] + dTwi[-1]) * VolMass * SpecHeat * (Umean * s)
+                    dTg += TwH[i] * VolMass * SpecHeat * (Umean * s)
 
                 # TODO compute an estimate of dTg
                 dTg /= VolMass * SpecHeat * (Umean * sum(Sh))
                 dTg -= TwH[0]
                 if e.isMasterRank():
-                    print(f"{target} Channel{i}: cname={cname}, Tw={TwH[0]}, dTg={dTg}")
+                    print(f"{target} Tout: cname={cname}, Tw={TwH[0]}, dTg={dTg}")
 
             # global:  what to do when len(Tw) != 1
             else:
