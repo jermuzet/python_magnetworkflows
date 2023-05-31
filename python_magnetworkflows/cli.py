@@ -7,6 +7,7 @@ import os
 import argparse
 import configparser
 
+import pandas as pd
 import json
 
 from .waterflow import waterflow
@@ -108,13 +109,13 @@ def main():
                     "name": "PowerM",
                     "csv": "heat.measures/values.csv",
                     "rematch": f"Statistics_PowerM_{filter}\\w*integrate",
-                    "post": {"type": "Statistics_Power", "math": "integrate"},
+                    "post": {"type": "Statistics_PowerM", "math": "integrate"},
                     "unit": "W",
                 }
                 PowerH = {
                     "name": "PowerH",
                     "csv": "heat.measures/values.csv",
-                    "rematch": f"Statistics_Power_{filter}H\\d+_Cu\\d+_integrate",
+                    "rematch": f"Statistics_Power_{filter}H\\d+_integrate",
                     "post": {"type": "Statistics_Power", "math": "integrate"},
                     "unit": "W",
                 }
@@ -170,13 +171,13 @@ def main():
                     "name": "PowerM",
                     "csv": "heat.measures/values.csv",
                     "rematch": f"Statistics_PowerM_{filter}\\w*integrate",
-                    "post": {"type": "Statistics_Power", "math": "integrate"},
+                    "post": {"type": "Statistics_PowerM", "math": "integrate"},
                     "unit": "W",
                 }
                 PowerH = {
                     "name": "PowerH",
                     "csv": "heat.measures/values.csv",
-                    "rematch": f"Statistics_Power_{filter}\\w+_B\\d+_integrate",
+                    "rematch": f"Statistics_Power_{filter}\\w+_B\\D_integrate",
                     "post": {"type": "Statistics_Power", "math": "integrate"},
                     "unit": "W",
                 }
@@ -249,7 +250,23 @@ def main():
     
     """
 
-    oneconfig(feelpp_directory, jsonmodel, meshmodel, args, targets, parameters)
+    (table, dict_df) = oneconfig(
+        feelpp_directory, jsonmodel, meshmodel, args, targets, parameters
+    )
+
+    for target, values in dict_df.items():
+        for key, df in values.items():
+            if isinstance(df, pd.DataFrame):
+                df = df.T
+                outdir = f"{target[:-2]}_{key}.measures"
+                if not os.path.exists(outdir):
+                    os.mkdir(outdir)
+                df.to_csv(f"{outdir}/values.csv", index=True)
+
+    outdir = f"U.measures"
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+    table.to_csv(f"{outdir}/values.csv", index=False)
 
     return 0
 
