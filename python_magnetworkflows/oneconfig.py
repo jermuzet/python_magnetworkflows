@@ -35,10 +35,19 @@ def oneconfig(
     basedir = os.path.dirname(args.cfgfile)
     print(f"oneconfig: workingdir={pwd}, jsonmodel={jsonmodel}, basedir={basedir}")
 
+    dict_df = {}
     for target, values in targets.items():
         print(f"{target}: {values['objectif']}")
         table_values.append(float(values["objectif"]))
         table_headers.append(f'{target}[{values["unit"]}]')
+        dict_df[target] = {
+            "PowerM": pd.DataFrame,
+            "PowerH": pd.DataFrame,
+            "Flux": pd.DataFrame,
+            "hdT": pd.DataFrame,
+            "statsT": pd.DataFrame,
+            "target": values["objectif"],
+        }
 
     # capture actual params per target:
     params = {}
@@ -50,7 +59,7 @@ def oneconfig(
             tmp = getparam(p[0], parameters, p[1], args.debug)
             params[key] += tmp
 
-    (table, results) = solve(
+    (table, dict_df) = solve(
         feelpp_directory,
         f"{pwd}/{jsonmodel}",
         f"{pwd}/{meshmodel}",
@@ -58,13 +67,16 @@ def oneconfig(
         targets,
         params,
         parameters,
+        dict_df,
     )
 
-    for target, values in results.items():
+    for target, values in dict_df.items():
         print(f"result for {target}:")
         for key, df in values.items():
             print(f"\t{key}:")
             if isinstance(df, pd.DataFrame):
+                df["Nom"] = f'I={dict_df[target]["target"]}A'
+                df.set_index("Nom", inplace=True)
                 print(df)
                 # df.to_markdown(tablefmt="psql") # requires pqndqs >= 1.0.0
 
@@ -195,4 +207,5 @@ def oneconfig(
         results[name] = (table_headers, table_values)
         """
 
-    return results
+    return (table, dict_df)
+
