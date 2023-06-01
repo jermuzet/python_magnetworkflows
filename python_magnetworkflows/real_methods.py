@@ -38,6 +38,7 @@ def getFlux(df: pd.DataFrame, marker: str):
     return df[f"Statistics_Flux_{marker}_integrate"].iloc[-1]
 """
 import pandas as pd
+from typing import List
 from .waterflow import waterflow, rho, Cp
 
 # For Heat exchange
@@ -68,3 +69,16 @@ def getMaxT(df: pd.DataFrame, marker: str):
 
 def getMinT(df: pd.DataFrame, marker: str):
     return df[f"Statistics_MaxT_{marker}_min"].iloc[-1]
+
+
+def getTout(
+    T: List[float], VolMass: List[float], SpecHeat: List[float], Q: List[float]
+) -> float:
+    Tout = 0
+    rhoCpQ = 0
+    for i, (Ti, RHOi, CPi, Qi) in enumerate(zip(T, VolMass, SpecHeat, Q)):
+        Tout += Ti * RHOi * CPi * Qi
+        rhoCpQ += RHOi * CPi * Qi
+
+    Tout /= rhoCpQ
+    return Tout
