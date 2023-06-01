@@ -16,7 +16,7 @@ import pandas as pd
 from .params import getTarget, getparam
 from .waterflow import waterflow as w
 from .waterflow import rho, Cp
-from .real_methods import getDT, getHeatCoeff
+from .real_methods import getDT, getHeatCoeff, getTout
 
 
 def create_field(
@@ -112,20 +112,6 @@ def init(args, jsonmodel: str, meshmodel: str, directory: str = ""):
 
     print(f"init: done")
     return (e, f)
-
-
-def get_Tout(
-    TwH: List[float], dTwi: List[float], Pressure: float, Umean: float, Sh: List[float]
-) -> float:
-    Tout = 0
-    for i, s in enumerate(Sh):
-        VolMass = rho(TwH[i] + dTwi[i] / 2.0, Pressure)
-        SpecHeat = Cp(TwH[i] + dTwi[i] / 2.0, Pressure)
-        Tout += (TwH[i] + dTwi[i]) * VolMass * SpecHeat * (Umean * s)
-
-    rhoCpQ = VolMass * SpecHeat * (Umean * sum(Sh))
-    Tout /= rhoCpQ
-    return Tout, rhoCpQ
 
 
 def solve(
@@ -224,7 +210,10 @@ def solve(
         # TODO: get csv to look for depends on cfpdes model used
         table_ = [it]
         err_max = 0
-        Touts = []
+        List_Tout = []
+        List_VolMassout = []
+        List_SpecHeatout = []
+        List_Qout = []
         for target, values in targets.items():
             objectif = -values["objectif"]
             # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
@@ -361,12 +350,16 @@ def solve(
                     print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
                 dTwi = []
+                Ti = []
                 hi = []
-                Tout = 0
+                VolMass = []
+                SpecHeat = []
+                Q = []
                 for i, (d, s) in enumerate(zip(Dh, Sh)):
                     cname = p_params["Dh"][i].replace("_Dh", "")
                     PowerCh = dict_df[target]["Flux"].iloc[-1, i]
                     dTwi.append(getDT(abs(objectif), flow, PowerCh, TwH[i], Pressure))
+                    Ti.append(TwH[i] + dTwi[-1])
                     hi.append(getHeatCoeff(flow, d, Umean, TwH[i]))
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                     f.addParameterInModelProperties(p_params["h"][i], hi[-1])
@@ -380,18 +373,25 @@ def solve(
                             f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi[i]}, hi={hi[i]}'
                         )
 
-                    # VolMass = rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    # SpecHeat = Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    # Tout += (TwH[i] + dTwi[-1]) * VolMass * SpecHeat * (Umean * s)
+                    VolMass.append(rho(TwH[i] + dTwi[-1] / 2.0, Pressure))
+                    SpecHeat.append(Cp(TwH[i] + dTwi[-1] / 2.0, Pressure))
+                    Q.append(Umean * s)
 
                 # TODO compute an estimate of dTg
                 # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
-                Tout, rhoCpQ = get_Tout(TwH, dTwi, Pressure, Umean, Sh)
+                Tout = getTout(Ti, VolMass, SpecHeat, Q)
+                VolMassout = rho(Tout, Pressure)
+                SpecHeatout = Cp(Tout, Pressure)
+                Qout = Umean * sum(Sh)
+
+                List_Tout.append(Tout)
+                List_VolMassout.append(VolMassout)
+                List_SpecHeatout.append(SpecHeatout)
+                List_Qout.append(Qout)
+
                 dTg = Tout - TwH[0]
                 if e.isMasterRank():
                     print(f"{target} Tout={Tout}, Tw={TwH[0]}, dTg={dTg}")
-
-                Touts.append((Tout, rhoCpQ))
 
             # global:  what to do when len(Tw) != 1
             else:
@@ -417,13 +417,9 @@ def solve(
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
 
-        if "H" in args.cooling and len(Touts) > 1:
-            Tout_site = 0
-            rhoCpQ_site = 0
-            for Tout, rhoCpQ in Touts:
-                Tout_site += Tout * rhoCpQ
-                rhoCpQ_site += rhoCpQ
-            Tout_site /= rhoCpQ_site
+        if "H" in args.cooling and len(List_Tout) > 1:
+            Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
+
             dTg = Tout_site - TwH[0]
             if e.isMasterRank():
                 print(f"MSITE Tout={Tout_site}, Tw={TwH[0]}, dTg={dTg}")
