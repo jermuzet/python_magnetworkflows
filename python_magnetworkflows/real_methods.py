@@ -37,7 +37,7 @@ def getMinT(df: pd.DataFrame, marker: str):
 def getFlux(df: pd.DataFrame, marker: str):
     return df[f"Statistics_Flux_{marker}_integrate"].iloc[-1]
 """
-
+import pandas as pd
 from .waterflow import waterflow, rho, Cp
 
 # For Heat exchange
@@ -55,3 +55,16 @@ def getHeatCoeff(waterflow: waterflow, Dh: float, U: float, Tw: float):
     # P = pressure(objectif)
     # dTw = setDT(objectif, Power, Tw, P)
     return waterflow.montgomery(Tw, U, Dh)
+
+
+# Temperature
+def getMeanT(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_MeanT_{marker}_mean"].iloc[-1]
+
+
+def getMaxT(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_MaxT_{marker}_max"].iloc[-1]
+
+
+def getMinT(df: pd.DataFrame, marker: str):
+    return df[f"Statistics_MaxT_{marker}_min"].iloc[-1]
