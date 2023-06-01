@@ -134,6 +134,7 @@ def solve(
     meshmodel,
     args,
     targets: dict,
+    postvalues: dict,
     params: dict,
     parameters: dict,
     dict_df: dict,
@@ -306,6 +307,17 @@ def solve(
                 print(f"p_params: {p_params.keys()}")
                 print(f'p_params[Tw]={p_params["Tw"]}')
 
+            for key in ["statsT", "statsTH"]:
+                for param in postvalues[target][key]:
+                    name = param["name"]
+                    if e.isMasterRank():
+                        print(f"{target}: postvalues_params {name}")
+
+                    if "csv" in param:
+                        dict_df[target][key][name] = getTarget(
+                            {f"{name}": param}, name, e, args.debug
+                        )
+
             PowerM = dict_df[target]["PowerM"].iloc[-1, 0]
             SPower_H = dict_df[target]["PowerH"].iloc[-1].sum()
             SFlux_H = dict_df[target]["Flux"].iloc[-1].sum()
@@ -360,6 +372,9 @@ def solve(
                     f.addParameterInModelProperties(p_params["h"][i], hi[-1])
                     parameters[p_params["h"][i]] = hi[-1]
                     parameters[p_params["dTwH"][i]] = dTwi[-1]
+                    dict_df[target]["HeatCoeff"][p_params["h"][i]] = [hi[-1]]
+                    dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[-1]]
+
                     if e.isMasterRank():
                         print(
                             f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi[i]}, hi={hi[i]}'
@@ -391,6 +406,9 @@ def solve(
                     f.addParameterInModelProperties(p_params["hw"][i], hg)
                     parameters[p_params["hw"][i]] = hg
                     parameters[p_params["dTw"][i]] = dTg
+
+                    dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [hg]
+                    dict_df[target]["DT"][p_params["dTw"][i]] = [dTg]
 
                 if e.isMasterRank():
                     print(

@@ -12,6 +12,7 @@ import json
 
 from .waterflow import waterflow
 from .real_methods import getDT, getHeatCoeff
+from .real_methods import getMinT, getMeanT, getMaxT
 
 from .oneconfig import oneconfig
 
@@ -97,6 +98,7 @@ def main():
         parameters = dict_json["Parameters"]
 
     targets = {}
+    postvalues = {}
 
     # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
     if args.mdata:
@@ -150,6 +152,66 @@ def main():
                     ],
                     "value": (getDT),
                     "unit": "K",
+                }
+                MinT = {
+                    "name": "MinT",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Stat_T_{filter}\\w*min",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMinT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_Stat_T", "math": "min"},
+                }
+                MeanT = {
+                    "name": "MeanT",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Stat_T_{filter}\\w*mean",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMeanT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_Stat_T", "math": "mean"},
+                }
+                MaxT = {
+                    "name": "MaxT",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Stat_T_{filter}\\w*max",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMaxT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_Stat_T", "math": "max"},
+                }
+                MinTH = {
+                    "name": "MinTH",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_T_{filter}\\w+\\d+_min",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMinT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_T", "math": "min"},
+                }
+                MeanTH = {
+                    "name": "MeanTH",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_T_{filter}\\w+\\d+_mean",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMeanT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_T", "math": "mean"},
+                }
+                MaxTH = {
+                    "name": "MaxTH",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_T_{filter}\\w+\\d+_max",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMaxT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_T", "math": "max"},
                 }
 
                 targets[f"{filter}I"] = {
@@ -213,6 +275,66 @@ def main():
                     "value": (getDT),
                     "unit": "K",
                 }
+                MinT = {
+                    "name": "MinT",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Stat_T_{filter}\\w*min",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMinT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_Stat_T", "math": "min"},
+                }
+                MeanT = {
+                    "name": "MeanT",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Stat_T_{filter}\\w*mean",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMeanT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_Stat_T", "math": "mean"},
+                }
+                MaxT = {
+                    "name": "MaxT",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_Stat_T_{filter}\\w*max",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMaxT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_Stat_T", "math": "max"},
+                }
+                MinTH = {
+                    "name": "MinTH",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_T_{filter}\\w+_B\\D_min",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMinT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_T", "math": "min"},
+                }
+                MeanTH = {
+                    "name": "MeanTH",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_T_{filter}\\w+_B\\D_mean",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMeanT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_T", "math": "mean"},
+                }
+                MaxTH = {
+                    "name": "MaxTH",
+                    "csv": "heat.measures/values.csv",
+                    "rematch": f"Statistics_T_{filter}\\w+_B\\D_max",
+                    "params": [],
+                    "control_params": [],
+                    "value": (getMaxT),
+                    "unit": "K",
+                    "post": {"type": "Statistics_T", "math": "max"},
+                }
 
                 targets[f"{filter}I"] = {
                     "objectif": values["value"],
@@ -226,6 +348,11 @@ def main():
                     "post": {"type": "Statistics_Intensity", "math": "integrate"},
                     "waterflow": waterflow.flow_params(values["flow"]),
                 }
+
+            postvalues[f"{filter}I"] = {
+                "statsT": [MinT, MeanT, MaxT],
+                "statsTH": [MinTH, MeanTH, MaxTH],
+            }
 
     print(f"targets: {targets.keys()}")
 
@@ -251,7 +378,7 @@ def main():
     """
 
     (table, dict_df) = oneconfig(
-        feelpp_directory, jsonmodel, meshmodel, args, targets, parameters
+        feelpp_directory, jsonmodel, meshmodel, args, targets, postvalues, parameters
     )
 
     for target, values in dict_df.items():
@@ -262,6 +389,13 @@ def main():
                 if not os.path.exists(outdir):
                     os.mkdir(outdir)
                 df.to_csv(f"{outdir}/values.csv", index=True)
+            if key in ["statsT", "statsTH"]:
+                list_dfT = [dfT for keyT, dfT in df.items()]
+                dfT = pd.concat(list_dfT).T
+                outdir = f"{target[:-2]}_{key}.measures"
+                if not os.path.exists(outdir):
+                    os.mkdir(outdir)
+                dfT.to_csv(f"{outdir}/values.csv", index=True)
 
     outdir = f"U.measures"
     if not os.path.exists(outdir):

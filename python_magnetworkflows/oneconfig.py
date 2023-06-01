@@ -19,7 +19,13 @@ from .solver import solve
 
 
 def oneconfig(
-    feelpp_directory, jsonmodel, meshmodel, args, targets: dict, parameters: dict
+    feelpp_directory,
+    jsonmodel,
+    meshmodel,
+    args,
+    targets: dict,
+    postvalues: dict,
+    parameters: dict,
 ):
     """
     Run a simulation until currents are reached
@@ -41,11 +47,21 @@ def oneconfig(
         table_values.append(float(values["objectif"]))
         table_headers.append(f'{target}[{values["unit"]}]')
         dict_df[target] = {
-            "PowerM": pd.DataFrame,
-            "PowerH": pd.DataFrame,
-            "Flux": pd.DataFrame,
-            "hdT": pd.DataFrame,
-            "statsT": pd.DataFrame,
+            "PowerM": pd.DataFrame(),
+            "PowerH": pd.DataFrame(),
+            "Flux": pd.DataFrame(),
+            "HeatCoeff": pd.DataFrame(),
+            "DT": pd.DataFrame(),
+            "statsT": {
+                "MinT": pd.DataFrame(),
+                "MaxT": pd.DataFrame(),
+                "MeanT": pd.DataFrame(),
+            },
+            "statsTH": {
+                "MinTH": pd.DataFrame(),
+                "MaxTH": pd.DataFrame(),
+                "MeanTH": pd.DataFrame(),
+            },
             "target": values["objectif"],
         }
 
@@ -65,20 +81,25 @@ def oneconfig(
         f"{pwd}/{meshmodel}",
         args,
         targets,
+        postvalues,
         params,
         parameters,
         dict_df,
     )
 
     for target, values in dict_df.items():
-        print(f"result for {target}:")
+        print(f"\n\nresult for {target}:")
         for key, df in values.items():
-            print(f"\t{key}:")
             if isinstance(df, pd.DataFrame):
+                print(f"\t{key}:")
                 df["Nom"] = f'I={dict_df[target]["target"]}A'
                 df.set_index("Nom", inplace=True)
                 print(df)
                 # df.to_markdown(tablefmt="psql") # requires pqndqs >= 1.0.0
+            if key in ["statsT", "statsTH"]:
+                for keyT, dfT in df.items():
+                    dfT["Nom"] = f'{keyT}_I={dict_df[target]["target"]}A'
+                    dfT.set_index("Nom", inplace=True)
 
     # update
     """
