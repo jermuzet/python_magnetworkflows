@@ -16,7 +16,7 @@ import pandas as pd
 from .params import getTarget, getparam
 from .waterflow import waterflow as w
 from .waterflow import rho, Cp
-from .real_methods import getDT, getHeatCoeff
+from .real_methods import getDT, getHeatCoeff, getTout
 
 
 def create_field(
@@ -120,8 +120,10 @@ def solve(
     meshmodel,
     args,
     targets: dict,
+    postvalues: dict,
     params: dict,
     parameters: dict,
+    dict_df: dict,
 ):
     """
     targets: dict of target
@@ -174,7 +176,6 @@ def solve(
 
     # Xh = fpp.functionSpace(space="Pch", mesh=f.mesh(), order=1)
     # usave = Xh.element()
-    output_df = {}
 
     while it < args.itermax:
         print(f"make a copy of files for it={it}")
@@ -209,6 +210,10 @@ def solve(
         # TODO: get csv to look for depends on cfpdes model used
         table_ = [it]
         err_max = 0
+        List_Tout = []
+        List_VolMassout = []
+        List_SpecHeatout = []
+        List_Qout = []
         for target, values in targets.items():
             objectif = -values["objectif"]
             # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
@@ -253,7 +258,6 @@ def solve(
             # TODO upload p_df into a dict like {name: p_df} with name = target (aka key of targets)
             # this way we can get p_df per target as an output for solve
             # NB: pd_df[pname] is a pandas dataframe (pname is parameter name, eg Flux)
-            p_df = {}
 
             for param in values["computed_params"]:
                 name = param["name"]
@@ -261,9 +265,11 @@ def solve(
                     print(f"{target}: computed_params {name}")
 
                 if "csv" in param:
-                    p_df[name] = getTarget({f"{name}": param}, name, e, args.debug)
+                    dict_df[target][name] = getTarget(
+                        {f"{name}": param}, name, e, args.debug
+                    )
                     if args.debug and e.isMasterRank():
-                        print(f"{target}: {name}={p_df[name]}")
+                        print(f"{target}: {name}={dict_df[target][name]}")
                 else:
                     if args.debug and e.isMasterRank():
                         print(f"{target}: {name} computed")
@@ -284,20 +290,31 @@ def solve(
                             p_params[pname] += tmp
                         else:
                             p_params[pname] = tmp
-            output_df[target] = p_df
+
             if args.debug and e.isMasterRank():
-                print(f"p_df: {p_df.keys()}")
+                print(f"p_df: {dict_df[target].keys()}")
                 print(f"p_params: {p_params.keys()}")
                 print(f'p_params[Tw]={p_params["Tw"]}')
 
-            print("PowerM : ", p_df["PowerM"])
-            PowerM = p_df["PowerM"].iloc[-1, 0]
-            SPower_H = p_df["PowerH"].iloc[-1].sum()
-            SFlux_H = p_df["Flux"].iloc[-1].sum()
+            for key in ["statsT", "statsTH"]:
+                for param in postvalues[target][key]:
+                    name = param["name"]
+                    if e.isMasterRank():
+                        print(f"{target}: postvalues_params {name}")
+
+                    if "csv" in param:
+                        dict_df[target][key][name] = getTarget(
+                            {f"{name}": param}, name, e, args.debug
+                        )
+
+            PowerM = dict_df[target]["PowerM"].iloc[-1, 0]
+            SPower_H = dict_df[target]["PowerH"].iloc[-1].sum()
+            SFlux_H = dict_df[target]["Flux"].iloc[-1].sum()
             if e.isMasterRank():
-                print(f'{target}: PowerH {p_df["PowerH"]}')
+                print("PowerM : ", dict_df[target]["PowerM"])
+                print(f'{target}: PowerH {dict_df[target]["PowerH"]}')
                 print(
-                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={p_df["PowerH"].iloc[-1]}'
+                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={dict_df[target]["PowerH"].iloc[-1]}'
                 )
 
                 if args.debug:
@@ -330,34 +347,51 @@ def solve(
                     print(
                         f"{target}: len(Dh)={len(Dh)}, len(TwH)={len(TwH)}, len(dTwH)={len(dTwH)}, len(Channels/Slits)={len(hwH)}"
                     )
-                    print(f'{target} Flux: {p_df["Flux"]}')
+                    print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
                 dTwi = []
+                Ti = []
                 hi = []
-                dTg = 0
+                VolMass = []
+                SpecHeat = []
+                Q = []
                 for i, (d, s) in enumerate(zip(Dh, Sh)):
                     cname = p_params["Dh"][i].replace("_Dh", "")
-                    PowerCh = p_df["Flux"].iloc[-1, i]
+                    PowerCh = dict_df[target]["Flux"].iloc[-1, i]
                     dTwi.append(getDT(abs(objectif), flow, PowerCh, TwH[i], Pressure))
+                    Ti.append(TwH[i] + dTwi[-1])
                     hi.append(getHeatCoeff(flow, d, Umean, TwH[i]))
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                     f.addParameterInModelProperties(p_params["h"][i], hi[-1])
                     parameters[p_params["h"][i]] = hi[-1]
                     parameters[p_params["dTwH"][i]] = dTwi[-1]
+                    dict_df[target]["HeatCoeff"][p_params["h"][i]] = [hi[-1]]
+                    dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[-1]]
+
                     if e.isMasterRank():
                         print(
                             f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi[i]}, hi={hi[i]}'
                         )
 
-                    VolMass = rho(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    SpecHeat = Cp(TwH[i] + dTwi[-1] / 2.0, Pressure)
-                    dTg += (TwH[i] + dTwi[-1]) * VolMass * SpecHeat * (Umean * s)
+                    VolMass.append(rho(TwH[i] + dTwi[-1] / 2.0, Pressure))
+                    SpecHeat.append(Cp(TwH[i] + dTwi[-1] / 2.0, Pressure))
+                    Q.append(Umean * s)
 
                 # TODO compute an estimate of dTg
-                dTg /= VolMass * SpecHeat * (Umean * sum(Sh))
-                dTg -= TwH[0]
+                # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
+                Tout = getTout(Ti, VolMass, SpecHeat, Q)
+                VolMassout = rho(Tout, Pressure)
+                SpecHeatout = Cp(Tout, Pressure)
+                Qout = Umean * sum(Sh)
+
+                List_Tout.append(Tout)
+                List_VolMassout.append(VolMassout)
+                List_SpecHeatout.append(SpecHeatout)
+                List_Qout.append(Qout)
+
+                dTg = Tout - TwH[0]
                 if e.isMasterRank():
-                    print(f"{target} Channel{i}: cname={cname}, Tw={TwH[0]}, dTg={dTg}")
+                    print(f"{target} Tout={Tout}, Tw={TwH[0]}, dTg={dTg}")
 
             # global:  what to do when len(Tw) != 1
             else:
@@ -373,12 +407,22 @@ def solve(
                     parameters[p_params["hw"][i]] = hg
                     parameters[p_params["dTw"][i]] = dTg
 
+                    dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [hg]
+                    dict_df[target]["DT"][p_params["dTw"][i]] = [dTg]
+
                 if e.isMasterRank():
                     print(
                         f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={PowerM}, dTg={dTg}, hg={hg}'
                     )
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
+
+        if "H" in args.cooling and len(List_Tout) > 1:
+            Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
+
+            dTg = Tout_site - TwH[0]
+            if e.isMasterRank():
+                print(f"MSITE Tout={Tout_site}, Tw={TwH[0]}, dTg={dTg}")
 
         # update Parameters
         f.updateParameterValues()
@@ -406,6 +450,8 @@ def solve(
     if e.isMasterRank():
         print(tabulate(table, headers, tablefmt="simple"))
 
+    table_df = pd.DataFrame(table, columns=headers)
+
     if err_max > args.eps or it >= args.itermax:
         raise RuntimeError(f"Fail to solve {jsonmodel}: err_max={err_max}, it={it}")
     """
@@ -427,4 +473,4 @@ def solve(
     os.remove(save_h5)
     os.remove(save_json)
 
-    return (table, output_df)
+    return (table_df, dict_df)
