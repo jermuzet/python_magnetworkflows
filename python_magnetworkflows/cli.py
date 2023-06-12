@@ -16,6 +16,8 @@ from .real_methods import getMinT, getMeanT, getMaxT
 
 from .oneconfig import oneconfig
 
+from mpi4py import MPI
+
 
 def main():
     # print(f'sys.argv({type(sys.argv)})={sys.argv}')
@@ -27,6 +29,9 @@ def main():
         "\n"
         "Before running adapt flow_params to your magnet setup \n"
     )
+
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
 
     command_line = None
     parser = argparse.ArgumentParser(description="Cfpdes model", epilog=epilog)
@@ -59,11 +64,12 @@ def main():
     parser.add_argument("--verbose", help="activate verbose", action="store_true")
 
     args = parser.parse_args()
-    if args.debug:
+    if args.debug and rank == 0:
         print(args)
 
     pwd = os.getcwd()
-    print(f"cwd: {pwd}")
+    if rank == 0:
+        print(f"cwd: {pwd}")
 
     # Load units:
     # TODO force millimeter when args.method == "HDG"
@@ -76,20 +82,24 @@ def main():
     with open(args.cfgfile, "r") as inputcfg:
         feelpp_config.read_string("[DEFAULT]\n[main]\n" + inputcfg.read())
         feelpp_directory = feelpp_config["main"]["directory"]
-        print(f"feelpp_directory={feelpp_directory}")
+        if rank == 0:
+            print(f"feelpp_directory={feelpp_directory}")
 
         basedir = os.path.dirname(args.cfgfile)
-        print(f"basedir={basedir}")
+        if rank == 0:
+            print(f"basedir={basedir}")
         if not basedir:
             basedir = "."
 
         jsonmodel = feelpp_config["cfpdes"]["filename"]
         jsonmodel = jsonmodel.replace(r"$cfgdir/", f"{basedir}/")
-        print(f"jsonmodel={jsonmodel}")
+        if rank == 0:
+            print(f"jsonmodel={jsonmodel}")
 
         meshmodel = feelpp_config["cfpdes"]["mesh.filename"]
         meshmodel = meshmodel.replace(r"$cfgdir/", f"{basedir}/")
-        print(f"meshmodel={meshmodel}")
+        if rank == 0:
+            print(f"meshmodel={meshmodel}")
 
     # Get Parameters from JSON model file
     parameters = {}
@@ -103,7 +113,8 @@ def main():
     # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
     if args.mdata:
         for mname, values in args.mdata.items():
-            print(f"mname={mname}, values={values}")
+            if rank == 0:
+                print(f"mname={mname}, values={values}")
             filter = values["filter"]
             if values["type"] == "helix":
                 # change rematch, params, control_params
@@ -354,7 +365,8 @@ def main():
                 "statsTH": [MinTH, MeanTH, MaxTH],
             }
 
-    print(f"targets: {targets.keys()}")
+    if rank == 0:
+        print(f"targets: {targets.keys()}")
 
     """
     # pvalues: dict for params key->actual target in targets
@@ -378,29 +390,42 @@ def main():
     """
 
     (table, dict_df) = oneconfig(
-        feelpp_directory, jsonmodel, meshmodel, args, targets, postvalues, parameters
+        comm,
+        feelpp_directory,
+        jsonmodel,
+        meshmodel,
+        args,
+        targets,
+        postvalues,
+        parameters,
     )
 
-    for target, values in dict_df.items():
-        for key, df in values.items():
-            if isinstance(df, pd.DataFrame):
-                df = df.T
-                outdir = f"{target[:-2]}_{key}.measures"
-                if not os.path.exists(outdir):
-                    os.mkdir(outdir)
-                df.to_csv(f"{outdir}/values.csv", index=True)
-            if key in ["statsT", "statsTH"]:
-                list_dfT = [dfT for keyT, dfT in df.items()]
-                dfT = pd.concat(list_dfT).T
-                outdir = f"{target[:-2]}_{key}.measures"
-                if not os.path.exists(outdir):
-                    os.mkdir(outdir)
-                dfT.to_csv(f"{outdir}/values.csv", index=True)
+    if rank == 0:
+        for target, values in dict_df.items():
+            for key, df in values.items():
+                if key in ["DT", "HeatCoeff"]:
+                    outdir = f"{target[:-2]}_{key}.measures"
+                    if not os.path.exists(outdir):
+                        os.mkdir(outdir)
+                    df.to_csv(f"{outdir}/values_noT.csv", index=True)
+                if isinstance(df, pd.DataFrame):
+                    df = df.T
+                    outdir = f"{target[:-2]}_{key}.measures"
+                    if not os.path.exists(outdir):
+                        os.mkdir(outdir)
+                    df.to_csv(f"{outdir}/values.csv", index=True)
+                if key in ["statsT", "statsTH"]:
+                    list_dfT = [dfT for keyT, dfT in df.items()]
+                    dfT = pd.concat(list_dfT).T
+                    outdir = f"{target[:-2]}_{key}.measures"
+                    if not os.path.exists(outdir):
+                        os.mkdir(outdir)
+                    dfT.to_csv(f"{outdir}/values.csv", index=True)
 
-    outdir = f"U.measures"
-    if not os.path.exists(outdir):
-        os.mkdir(outdir)
-    table.to_csv(f"{outdir}/values.csv", index=False)
+        outdir = f"U.measures"
+        if not os.path.exists(outdir):
+            os.mkdir(outdir)
+        table.to_csv(f"{outdir}/values.csv", index=False)
 
     return 0
 
