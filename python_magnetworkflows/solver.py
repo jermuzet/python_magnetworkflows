@@ -24,7 +24,7 @@ def create_field(
 ):
     """
     create and save a field in h5"""
-    print("create_field")
+    # print("create_field")
 
     # TODO: pass space and order in method params
     Xh = fpp.functionSpace(space="Pch", mesh=feel_pb.mesh(), order=1)
@@ -46,13 +46,13 @@ def create_field(
             )
 
     usave.save(wd, name="U")
-    print("create_field: done")
+    # print("create_field: done")
 
 
 def create_field_init(jsonmodel: str, meshmodel: str):
     """
     create and save a field in h5"""
-    print("create_field")
+    # print("create_field")
 
     m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
     Xh = fpp.functionSpace(space="Pch", mesh=m2d, order=1)
@@ -69,7 +69,7 @@ def create_field_init(jsonmodel: str, meshmodel: str):
                 )
 
     usave.save(basedir, name="U")
-    print("create_field: done")
+    # print("create_field: done")
 
 
 def update(jsonmodel: str, parameters: dict):
@@ -91,17 +91,19 @@ def update(jsonmodel: str, parameters: dict):
 
 # TODO create toolboxes_options on the fly
 def init(args, jsonmodel: str, meshmodel: str, directory: str = ""):
-    print(f"init: pwd={os.getcwd()}")
+    pwd = os.getcwd()
     e = fpp.Environment(
         ["cli.py"],
         opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
         config=fpp.localRepository(directory),
     )
+
     create_field_init(jsonmodel, meshmodel)
 
     e.setConfigFile(args.cfgfile)
 
     if e.isMasterRank():
+        print(f"init: pwd={pwd}")
         print("Create cfpdes")
     f = cfpdes.cfpdes(dim=2)
 
@@ -110,7 +112,8 @@ def init(args, jsonmodel: str, meshmodel: str, directory: str = ""):
     f.init()
     # f.printAndSaveInfo()
 
-    print(f"init: done")
+    if e.isMasterRank():
+        print(f"init: done")
     return (e, f)
 
 
@@ -130,8 +133,8 @@ def solve(
     params: dict(target, params:list of parameters name)
     """
 
-    # if args.debug:
-    print(f"solve: jsonmodel={jsonmodel}, args={args}")
+    if args.debug:
+        print(f"solve: jsonmodel={jsonmodel}, args={args}")
 
     # suffix of tmp files
     post = ""
@@ -139,29 +142,32 @@ def solve(
         post += f'{target}={values["objectif"]}{values["unit"]}-'
 
     basedir = os.path.dirname(jsonmodel)  # get absolute path instead??
-    print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}")
-
-    # save original jsonmodel
-    save_json = f"{jsonmodel}.init"
-    if os.path.isfile(save_json):
-        raise RuntimeError(
-            f"solve: backup jsonmodel to {save_json} - fails since file already exists"
-        )
-    else:
-        # Rename the file
-        shutil.copy2(jsonmodel, save_json)
 
     (e, f) = init(args, jsonmodel, meshmodel, directory=feelpp_directory)
 
+    if e.isMasterRank():
+        print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}")
+
+        # save original jsonmodel
+        save_json = f"{jsonmodel}.init"
+        if os.path.isfile(save_json):
+            raise RuntimeError(
+                f"solve: backup jsonmodel to {save_json} - fails since file already exists"
+            )
+        else:
+            # Rename the file
+            shutil.copy2(jsonmodel, save_json)
+
     # save original U.h5
-    save_h5 = f"{basedir}/U.h5.init"
-    if os.path.isfile(save_h5):
-        raise RuntimeError(
-            f"solve: backup U.h5 to {save_h5} - fails since file already exists"
-        )
-    else:
-        # Rename the file
-        shutil.copy2(f"{basedir}/U.h5", save_h5)
+    if e.isMasterRank():
+        save_h5 = f"{basedir}/U.h5.init"
+        if os.path.isfile(save_h5):
+            raise RuntimeError(
+                f"solve: backup U.h5 to {save_h5} - fails since file already exists"
+            )
+        else:
+            # Rename the file
+            shutil.copy2(f"{basedir}/U.h5", save_h5)
 
     it = 0
     err_max = 10 * args.eps
@@ -178,9 +184,10 @@ def solve(
     # usave = Xh.element()
 
     while it < args.itermax:
-        print(f"make a copy of files for it={it}")
         new_json = jsonmodel.replace(".json", f"-it{it}-{post[:-1]}.json")
-        print(f"jsonmodel={jsonmodel}, new_json={new_json}")
+        if e.isMasterRank():
+            print(f"make a copy of files for it={it}")
+            print(f"jsonmodel={jsonmodel}, new_json={new_json}")
         # shutil.copy2(jsonmodel, new_json)
         dict_json = {}
         with open(jsonmodel, "r") as jsonfile:
@@ -194,9 +201,10 @@ def solve(
 
         shutil.copy2(f"{basedir}/U.h5", f"{basedir}/U-it{it}.h5")
 
-        print(f"start calc for it={it}")
-        if args.debug and e.isMasterRank():
-            print("Parameters:", f.modelProperties().parameters())
+        if e.isMasterRank():
+            print(f"start calc for it={it}")
+            if args.debug:
+                print("Parameters:", f.modelProperties().parameters())
 
         # Solve and export the simulation
         try:
@@ -223,15 +231,14 @@ def solve(
 
             error = filtered_df.div(-objectif).add(1)
             err_max_target = max(error.abs().max(axis=1))
-            table_.append(err_max_target)
             err_max = max(err_max_target, err_max)
-
-            print(f"{target}: objectif={objectif}")
-            print(f"{target}: filtered_df={filtered_df}")
-            print(f"{target}: error={error}")
-            print(
-                f"{target}: it={it}, err_max={err_max_target}, eps={args.eps}, itmax={args.itermax}"
-            )
+            if e.isMasterRank():
+                print(f"{target}: objectif={objectif}")
+                print(f"{target}: filtered_df={filtered_df}")
+                print(f"{target}: error={error}")
+                print(
+                    f"{target}: it={it}, err_max={err_max_target}, eps={args.eps}, itmax={args.itermax}"
+                )
 
             for param in params[target]:
                 marker = param.replace(
@@ -241,9 +248,10 @@ def solve(
                 ovalue = float(parameters[param])
                 table_.append(ovalue)
                 nvalue = ovalue * objectif / val
-                print(
-                    f"{it}: {marker}, goal={objectif}, val={val}, err={error[marker].iloc[-1]}, ovalue={ovalue}, nvalue={nvalue}"
-                )
+                if e.isMasterRank():
+                    print(
+                        f"{it}: {marker}, goal={objectif}, val={val}, err={error[marker].iloc[-1]}, ovalue={ovalue}, nvalue={nvalue}"
+                    )
                 f.addParameterInModelProperties(param, nvalue)
                 parameters[param] = nvalue
 
@@ -252,8 +260,11 @@ def solve(
                 #     expr=fpp.expr(str(nvalue)),
                 # )
 
+            table_.append(err_max_target)
+
             # update bcs
-            print(f"{target}: it={it}, update BCs")
+            if e.isMasterRank():
+                print(f"{target}: it={it}, update BCs")
             p_params = {}
             # TODO upload p_df into a dict like {name: p_df} with name = target (aka key of targets)
             # this way we can get p_df per target as an output for solve
@@ -275,8 +286,10 @@ def solve(
                         print(f"{target}: {name} computed")
                     for p in param["params"]:
                         pname = p[0]
-                        # if args.debug and e.isMasterRank():
-                        print(f"{name}: extract params for {p[0]} (len(p)={len(p)})")
+                        if args.debug and e.isMasterRank():
+                            print(
+                                f"{name}: extract params for {p[0]} (len(p)={len(p)})"
+                            )
                         tmp = getparam(p[0], parameters, p[1], args.debug)
                         if len(p) == 4:
                             regex_match = re.compile(p[2])
@@ -432,9 +445,12 @@ def solve(
 
         table_.append(err_max)
         table.append(table_)
-
+        if e.isMasterRank():
+            print("create_field")
         create_field(f, targets, parameters, basedir, args.debug)
-        update(jsonmodel, parameters)
+        if e.isMasterRank():
+            print("create_field : done")
+            update(jsonmodel, parameters)
 
         if err_max <= args.eps:
             break
@@ -469,8 +485,8 @@ def solve(
         df = pd.DataFrame(table, columns = headers)
         df.to_csv(resfile, encoding='utf-8')
     """
-
-    os.remove(save_h5)
-    os.remove(save_json)
+    if e.isMasterRank():
+        os.remove(save_h5)
+        os.remove(save_json)
 
     return (table_df, dict_df)

@@ -19,6 +19,7 @@ from .solver import solve
 
 
 def oneconfig(
+    comm,
     feelpp_directory,
     jsonmodel,
     meshmodel,
@@ -34,16 +35,20 @@ def oneconfig(
     parameters: all jsonmodel parameters
     """
 
+    rank = comm.Get_rank()
+
     table_values = []
     table_headers = []
 
     pwd = os.getcwd()
     basedir = os.path.dirname(args.cfgfile)
-    print(f"oneconfig: workingdir={pwd}, jsonmodel={jsonmodel}, basedir={basedir}")
+    if rank == 0:
+        print(f"oneconfig: workingdir={pwd}, jsonmodel={jsonmodel}, basedir={basedir}")
 
     dict_df = {}
     for target, values in targets.items():
-        print(f"{target}: {values['objectif']}")
+        if rank == 0:
+            print(f"{target}: {values['objectif']}")
         table_values.append(float(values["objectif"]))
         table_headers.append(f'{target}[{values["unit"]}]')
         dict_df[target] = {
@@ -70,7 +75,7 @@ def oneconfig(
     for key, values in targets.items():
         params[key] = []
         for p in values["control_params"]:
-            if args.debug:
+            if args.debug and rank == 0:
                 print(f"extract control params for {p[0]}")
             tmp = getparam(p[0], parameters, p[1], args.debug)
             params[key] += tmp
@@ -88,13 +93,16 @@ def oneconfig(
     )
 
     for target, values in dict_df.items():
-        print(f"\n\nresult for {target}:")
+        if rank == 0:
+            print(f"\n\nresult for {target}:")
         for key, df in values.items():
             if isinstance(df, pd.DataFrame):
-                print(f"\t{key}:")
+                if rank == 0:
+                    print(f"\t{key}:")
                 df["Nom"] = f'I={dict_df[target]["target"]}A'
                 df.set_index("Nom", inplace=True)
-                print(df)
+                if rank == 0:
+                    print(df)
                 # df.to_markdown(tablefmt="psql") # requires pqndqs >= 1.0.0
             if key in ["statsT", "statsTH"]:
                 for keyT, dfT in df.items():
