@@ -54,12 +54,7 @@ def k(Tw: float, P: float) -> float:
 
 
 def Montgomery(
-    Tw: float,
-    Pw: float,
-    dPw: float,
-    U: float,
-    Dh: float,
-    L: float,
+    Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float
 ) -> float:
     """
     compute heat exchange coefficient in ??
@@ -75,37 +70,18 @@ def Montgomery(
     return 1426.404 * (1 + 1.5e-2 * (Tw - 273)) * exp(log(U) * 0.8) / exp(log(Dh) * 0.2)
 
 
-def Dittus(
-    Tw: float,
-    Pw: float,
-    dPw: float,
-    U: float,
-    Dh: float,
-    L: float,
-) -> float:
+def Dittus(Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float) -> float:
     params = (0.023, 0.8, 0.4)
     return hcorrelation(params, Tw, Pw, dPw, U, Dh, L)
 
 
-def Colburn(
-    Tw: float,
-    Pw: float,
-    dPw: float,
-    U: float,
-    Dh: float,
-    L: float,
-) -> float:
+def Colburn(Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float) -> float:
     params = (0.023, 0.8, 0.3)
     return hcorrelation(params, Tw, Pw, dPw, U, Dh, L)
 
 
-def Silberberg(
-    Tw: float,
-    Pw: float,
-    dPw: float,
-    U: float,
-    Dh: float,
-    L: float,
+def Silverberg(
+    Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float
 ) -> float:
     params = (0.015, 0.85, 0.3)
     return hcorrelation(params, Tw, Pw, dPw, U, Dh, L)
@@ -129,7 +105,7 @@ def Colebrook(self, Re: float, Dh: float, f: float, rugosity: float) -> float:
         if error <= 1.0e-3:
             break
 
-    return 1 / val**2
+    return 1 / val ** 2
 
 
 def Swanee(self, Re: float, Dh: float, f: float, rugosity: float) -> float:
@@ -203,13 +179,7 @@ def Prandlt(Tw: float, Pw: float) -> float:
 
 
 def hcorrelation(
-    params: tuple,
-    Tw: float,
-    Pw: float,
-    dPw: float,
-    U: float,
-    Dh: float,
-    L: float,
+    params: tuple, Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float
 ) -> float:
     """
     compute heat exchange coeff in W/m²/K
@@ -227,16 +197,7 @@ def hcorrelation(
 
     (alpha, n, m) = params
     nU = Uw(
-        Tw,
-        Pw,
-        dPw,
-        Dh,
-        L,
-        "Colebrook",
-        Pextra=1,
-        fguess=0.055,
-        uguess=U,
-        rugosity=0,
+        Tw, Pw, dPw, Dh, L, "Colebrook", Pextra=1, fguess=0.055, uguess=U, rugosity=0
     )
 
     Re = Reynolds(Tw, Pw, nU, Dh, L)

@@ -48,6 +48,20 @@ def main():
         default="mean",
     )
     parser.add_argument(
+        "--heatcorrelation",
+        help="choose cooling model",
+        type=str,
+        choices=["Montgomery", "Dittus", "Colburn", "Silverberg"],
+        default="Montgomery",
+    )
+    # parser.add_argument(
+    #     "--friction",
+    #     help="choose friction method",
+    #     type=str,
+    #     choices=["Blasius", "Filonenko", "Colebrook", "Swanee"],
+    #     default="Colebrook",
+    # )
+    parser.add_argument(
         "--eps",
         help="specify requested tolerance (default: 1.e-3)",
         type=float,
@@ -147,6 +161,8 @@ def main():
                         ("Sh", f"{filter}Sh\\d+"),
                         ("hw", f"{filter}hw"),
                         ("hwH", f"{filter}hw\\d+"),
+                        ("Zmax", f"{filter}Zmax"),
+                        ("ZmaxH", f"{filter}Zmax\\d+"),
                     ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
@@ -263,6 +279,8 @@ def main():
                         ("Sh", f"{filter}\\w+Sh"),
                         ("hw", f"{filter}\\w+hw", "\\w+_Slit\\w+", False),
                         ("hwH", f"{filter}\\w+hw", "\\w+_Slit\\w+", True),
+                        ("Zmax", f"{filter}\\w+Zmax", "\\w+_Slit\\w+", False),
+                        ("ZmaxH", f"{filter}\\w+Zmax", "\\w+_Slit\\w+", True),
                     ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
