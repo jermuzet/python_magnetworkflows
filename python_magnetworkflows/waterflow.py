@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-import math
 import json
 
 import warnings
@@ -11,36 +10,11 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     Quantity([])
 
-import freesteam
 
 # Pint configuration
 ureg = UnitRegistry()
 ureg.default_system = "SI"
 ureg.autoconvert_offset_to_baseunit = True
-
-
-def rho(Tw: float, P: float) -> float:
-    """
-    compute water volumic mass in ???
-
-    Tw: Temperature in Kelvin
-    P: Pressure in Bar
-    """
-    Steam = freesteam.steam_pT(P * 1.0e5, Tw)
-    # print(f'rho={Steam.rho}')
-    return Steam.rho
-
-
-def Cp(Tw: float, P: float) -> float:
-    """
-    compute water specific heat in ???
-
-    Tw: Temperature in Kelvin
-    P: Pressure in Bar
-    """
-    Steam = freesteam.steam_pT(P * 1.0e5, Tw)
-    # print(f'Cp={Steam.cp}')
-    return Steam.cp
 
 
 @dataclass
@@ -101,24 +75,15 @@ class waterflow:
             + (self.Pmax - self.Pmin) * (self.vpump(objectif) / self.Vpmax) ** 2
         )
 
+    def dpressure(self, objectif: float) -> float:
+        """
+        compute pressure in bar ???
+        """
+        return self.pressure(objectif) - self.Pmin
+
     def umean(self, objectif: float, section: float) -> float:
         """
         compute umean in m/s ???
         """
         # print("flow:", flow(objectif), section)
         return self.flow(objectif) / section
-
-    def montgomery(self, Tw: float, Umean: float, Dh: float) -> float:
-        """
-        compute heat exchange coefficient in ??
-
-        Tw: K
-        Umean: m/s
-        Dh: meter
-        """
-        return (
-            1426
-            * (1 + 1.5e-2 * (Tw - 273))
-            * math.exp(math.log(Umean) * 0.8)
-            / math.exp(math.log(Dh) * 0.2)
-        )

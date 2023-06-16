@@ -39,7 +39,9 @@ def getFlux(df: pd.DataFrame, marker: str):
 """
 import pandas as pd
 from typing import List
-from .waterflow import waterflow, rho, Cp
+from .waterflow import waterflow
+from .cooling import rho, Cp
+from .cooling import Montgomery, Dittus, Colburn, Silverberg
 
 # For Heat exchange
 
@@ -56,25 +58,25 @@ def getDT(
 
 
 def getHeatCoeff(
-    waterflow: waterflow, Dh: float, U: float, Tw: float, hw: float, relax: float = 0.0
+    Dh: float,
+    L: float,
+    U: float,
+    Tw: float,
+    Pw: float,
+    dPw: float,
+    model: str = "Montgomery",
+    hw: float,
+    relax: float = 0.0
 ):
-    # compute h as Montgomery()
-    # P = pressure(objectif)
-    # dTw = setDT(objectif, Power, Tw, P)
-    return (1 - relax) * waterflow.montgomery(Tw, U, Dh) + relax * hw
-
-
-# Temperature
-def getMeanT(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_MeanT_{marker}_mean"].iloc[-1]
-
-
-def getMaxT(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_MaxT_{marker}_max"].iloc[-1]
-
-
-def getMinT(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_MaxT_{marker}_min"].iloc[-1]
+    correlation = {
+        "Montgomery": Montgomery,
+        "Dittus": Dittus,
+        "Colburn": Colburn,
+        "Silverberg": Silverberg,
+    }
+    
+    h = correlation[model](Tw, Pw, dPw, U, Dh, L)
+    return (1 -relax) * h + relax * hw
 
 
 def getTout(
@@ -90,3 +92,16 @@ def getTout(
 
     Tout /= rhoCpQ
     return Tout
+
+
+# Temperature
+def getMean(df: pd.DataFrame, marker: str, field: str):
+    return df[f"Statistics_Mean{field}_{marker}_mean"].iloc[-1]
+
+
+def getMax(df: pd.DataFrame, marker: str, field: str):
+    return df[f"Statistics_Max{field}_{marker}_max"].iloc[-1]
+
+
+def getMin(df: pd.DataFrame, marker: str, field: str):
+    return df[f"Statistics_Max{field}_{marker}_min"].iloc[-1]
