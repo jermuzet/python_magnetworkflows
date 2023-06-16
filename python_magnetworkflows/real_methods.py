@@ -47,10 +47,14 @@ from .cooling import Montgomery, Dittus, Colburn, Silverberg
 
 
 def getDT(
-    objectif: float, waterflow: waterflow, Power: float, Tw: float, P: float
+    flow: float, Power: float, Tw: float, dTw: float, P: float, relax: float = 0.0
 ) -> float:
     # compute dT as Power / rho *Cp * Flow(I)
-    return Power / (rho(Tw, P) * Cp(Tw, P) * waterflow.flow(objectif))
+    DT = Power / (rho(Tw, P) * Cp(Tw, P) * flow)
+    # print(
+    #     f"GETDT={DT} objectif: {objectif}, flow: {flow}, Power: {Power}, Tw: {Tw}, P: {P}"
+    # )
+    return (1 - relax) * DT + relax * dTw
 
 
 def getHeatCoeff(
@@ -61,6 +65,8 @@ def getHeatCoeff(
     Pw: float,
     dPw: float,
     model: str = "Montgomery",
+    hw: float,
+    relax: float = 0.0
 ):
     correlation = {
         "Montgomery": Montgomery,
@@ -68,7 +74,9 @@ def getHeatCoeff(
         "Colburn": Colburn,
         "Silverberg": Silverberg,
     }
-    return correlation[model](Tw, Pw, dPw, U, Dh, L)
+    
+    h = correlation[model](Tw, Pw, dPw, U, Dh, L)
+    return (1 -relax) * h + relax * hw
 
 
 def getTout(
@@ -76,7 +84,9 @@ def getTout(
 ) -> float:
     Tout = 0
     rhoCpQ = 0
+    # print(f"Sum(Qi)={sum(Q)}")
     for i, (Ti, RHOi, CPi, Qi) in enumerate(zip(T, VolMass, SpecHeat, Q)):
+        # print(f"i:{i}, (Ti:{Ti}, RHOi:{RHOi}, CPi:{CPi}, Qi:{Qi})")
         Tout += Ti * RHOi * CPi * Qi
         rhoCpQ += RHOi * CPi * Qi
 

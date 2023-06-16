@@ -218,6 +218,8 @@ def solve(
         # TODO: get csv to look for depends on cfpdes model used
         table_ = [it]
         err_max = 0
+        err_max_dT = 0
+        err_max_h = 0
         List_Tout = []
         List_VolMassout = []
         List_SpecHeatout = []
@@ -323,16 +325,30 @@ def solve(
             PowerM = dict_df[target]["PowerM"].iloc[-1, 0]
             SPower_H = dict_df[target]["PowerH"].iloc[-1].sum()
             SFlux_H = dict_df[target]["Flux"].iloc[-1].sum()
+
+            Powers_Diff = abs(PowerM - SPower_H)
+            PowerFlux_Diff = abs(PowerM - SFlux_H)
             if e.isMasterRank():
                 print("PowerM : ", dict_df[target]["PowerM"])
                 print(f'{target}: PowerH {dict_df[target]["PowerH"]}')
                 print(
-                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={dict_df[target]["PowerH"].iloc[-1]}'
+                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={dict_df[target]["PowerH"].iloc[-1]} Ucoil={dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}'
+                )
+
+                print(
+                    f"{target}: it={it} Power-SPower_H={Powers_Diff}     Power-SFlux_H={PowerFlux_Diff}"
                 )
 
                 if args.debug:
                     for key in p_params:
                         print(f"{target}: {key}={p_params[key]}")
+
+            assert (
+                Powers_Diff / PowerM < 1e-3
+            ), f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM} SPower_H={SPower_H}"
+            assert (
+                PowerFlux_Diff / PowerM < 5e-2
+            ), f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM} SFlux_H={SFlux_H}"
 
             flow = values["waterflow"]
             Pressure = flow.pressure(abs(objectif))
@@ -350,19 +366,22 @@ def solve(
                     print(f"Dh[{i}]: key={p}, value={float(parameters[p])}")
                     i += 1
                 print(f'Dh: {p_params["Dh"]}')
-                print(f'hwH: {p_params["h"]}')
+                print(f'hwH: {p_params["hwH"]}')
 
             Umean = flow.umean(abs(objectif), sum(Sh))  # math.fsum(Sh)
             if e.isMasterRank():
                 print(
-                    f"{target}: it={it}, objectif={abs(objectif)}, Umean={Umean}, Flow={flow}"
+                    f"{target}: it={it}, objectif={abs(objectif)}, Umean={Umean}, Flow={flow.flow(abs(objectif))}"
                 )
+            dict_df[target]["flow"] = flow.flow(abs(objectif))
 
+            error_dT = []
+            error_h = []
             # per Channel/Slit
             if "H" in args.cooling:
                 TwH = [float(parameters[p]) for p in p_params["TwH"]]
                 dTwH = [float(parameters[p]) for p in p_params["dTwH"]]
-                hwH = [float(parameters[p]) for p in p_params["h"]]
+                hwH = [float(parameters[p]) for p in p_params["hwH"]]
 
                 i = 0
                 for p in p_params["h"]:
@@ -376,6 +395,8 @@ def solve(
                     )
                     print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
+                relax = 0.8
+
                 dTwi = []
                 Ti = []
                 hi = []
@@ -385,26 +406,35 @@ def solve(
                 for i, (d, s) in enumerate(zip(Dh, Sh)):
                     cname = p_params["Dh"][i].replace("_Dh", "")
                     PowerCh = dict_df[target]["Flux"].iloc[-1, i]
-                    dTwi.append(getDT(abs(objectif), flow, PowerCh, TwH[i], Pressure))
+                    Q.append(Umean * s)
+                    dTwi.append(getDT(Q[-1], PowerCh, TwH[i], dTwH[i], Pressure, relax))
                     Ti.append(TwH[i] + dTwi[-1])
                     hi.append(
-                        getHeatCoeff(d, Lh[i], Umean, TwH[i], Pressure, dPressure)
+                        getHeatCoeff(d, Lh[i], Umean, TwH[i] + dTwi[-1] / 2.0, Pressure, dPressure, hwH[i], relax)
                     )
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
-                    f.addParameterInModelProperties(p_params["h"][i], hi[-1])
-                    parameters[p_params["h"][i]] = hi[-1]
+                    f.addParameterInModelProperties(p_params["hwH"][i], hi[-1])
+                    parameters[p_params["hwH"][i]] = hi[-1]
                     parameters[p_params["dTwH"][i]] = dTwi[-1]
-                    dict_df[target]["HeatCoeff"][p_params["h"][i]] = [hi[-1]]
+                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[-1]]
                     dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[-1]]
+
+                    error_dT.append(abs(1 - (dTwH[i] / dTwi[-1])))
+                    error_h.append(abs(1 - (hwH[i] / hi[-1])))
 
                     if e.isMasterRank():
                         print(
-                            f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi[i]}, hi={hi[i]}'
+                            f"{target} {i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, dTwH={dTwH[i]}, hwH={hwH[i]}, dTwi={dTwi[i]}, hi={hi[i]}"
                         )
 
                     VolMass.append(rho(TwH[i] + dTwi[-1] / 2.0, Pressure))
                     SpecHeat.append(Cp(TwH[i] + dTwi[-1] / 2.0, Pressure))
-                    Q.append(Umean * s)
+
+                if e.isMasterRank():
+                    print(f"Q-flow={sum(Q)-flow.flow(abs(objectif))}")
+                    print(
+                        f"len(Ti)={len(Ti)}  len(VolMass)={len(VolMass)} len(SpecHeat)={len(SpecHeat)} len(Dh)={len(Dh)}  len(Sh)={len(Sh)}"
+                    )
 
                 # TODO compute an estimate of dTg
                 # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
@@ -420,7 +450,10 @@ def solve(
 
                 dTg = Tout - TwH[0]
                 if e.isMasterRank():
-                    print(f"{target} Tout={Tout}, Tw={TwH[0]}, dTg={dTg}")
+                    print(
+                        f"{target}: Tout={Tout}  Tw={TwH[0]}, umean={Umean}, Power={PowerM}, dTg={dTg} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif)))})"
+                    )
+                dict_df[target]["Tout"] = Tout
 
             # global:  what to do when len(Tw) != 1
             else:
@@ -436,12 +469,14 @@ def solve(
                 ]
 
                 for i, T in enumerate(Tw):
-                    dTg = getDT(abs(objectif), flow, PowerM, Tw[i], Pressure)
+                    if e.isMasterRank():
+                        print(f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}")
+                    dTg = getDT(abs(objectif), flow.flow(abs(objectif)), PowerM, Tw[i], Pressure)
                     hg = getHeatCoeff(
                         sum(Dh) / float(len(Dh)),
                         L[i],
                         Umean,
-                        Tw[i],
+                        Tw[i] + dTg / 2.0,
                         Pressure,
                         dPressure,
                     )
@@ -450,6 +485,9 @@ def solve(
                     parameters[p_params["hw"][i]] = hg
                     parameters[p_params["dTw"][i]] = dTg
 
+                    error_dT.append(abs(1 - (dTw[i] / dTg)))
+                    error_h.append(abs(1 - (hw[i] / hg)))
+
                     dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [hg]
                     dict_df[target]["DT"][p_params["dTw"][i]] = [dTg]
 
@@ -457,8 +495,12 @@ def solve(
                     print(
                         f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={PowerM}, dTg={dTg}, hg={hg}'
                     )
+                dict_df[target]["Tout"] = Tw[0] + dTg
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
+
+            err_max_dT = max(err_max_dT, max(error_dT))
+            err_max_h = max(err_max_h, max(error_h))
 
         if "H" in args.cooling and len(List_Tout) > 1:
             Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
@@ -471,7 +513,9 @@ def solve(
         f.updateParameterValues()
 
         if e.isMasterRank():
-            print(f"it={it}, err_max={err_max}, eps={args.eps}, itmax={args.itermax}")
+            print(
+                f"it={it}, err_max={err_max}, err_max_dT={err_max_dT}, err_max_h={err_max_h}, eps={args.eps}, itmax={args.itermax}"
+            )
 
         table_.append(err_max)
         table.append(table_)
@@ -482,7 +526,11 @@ def solve(
             print("create_field : done")
             update(jsonmodel, parameters)
 
-        if err_max <= args.eps:
+        if (
+            err_max <= args.eps
+            and err_max_dT <= max(args.eps, 1e-3)
+            and err_max_h <= max(args.eps, 1e-2)
+        ):
             break
 
         # reload feelpp
