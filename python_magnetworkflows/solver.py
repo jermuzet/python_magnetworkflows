@@ -15,7 +15,7 @@ import pandas as pd
 
 from .params import getTarget, getparam
 from .waterflow import waterflow as w
-from .waterflow import rho, Cp
+from .cooling import rho, Cp
 from .real_methods import getDT, getHeatCoeff, getTout
 
 
@@ -336,10 +336,19 @@ def solve(
 
             flow = values["waterflow"]
             Pressure = flow.pressure(abs(objectif))
+            dPressure = flow.dpressure(abs(objectif))
 
             Dh = [float(parameters[p]) for p in p_params["Dh"]]
             Sh = [float(parameters[p]) for p in p_params["Sh"]]
+            Lh = [
+                abs(float(parameters[p]) - float(parameters[p.replace("max", "min")]))
+                for p in p_params["Zmax"]
+            ]
             if args.debug and e.isMasterRank():
+                i = 0
+                for p in p_params["Dh"]:
+                    print(f"Dh[{i}]: key={p}, value={float(parameters[p])}")
+                    i += 1
                 print(f'Dh: {p_params["Dh"]}')
                 print(f'hwH: {p_params["h"]}')
 
@@ -354,6 +363,11 @@ def solve(
                 TwH = [float(parameters[p]) for p in p_params["TwH"]]
                 dTwH = [float(parameters[p]) for p in p_params["dTwH"]]
                 hwH = [float(parameters[p]) for p in p_params["h"]]
+
+                i = 0
+                for p in p_params["h"]:
+                    print(f"hwH[{i}]: key={p}, value={float(parameters[p])}")
+                    i += 1
 
                 # TODO verify if data are consistant??
                 if e.isMasterRank():
@@ -373,7 +387,9 @@ def solve(
                     PowerCh = dict_df[target]["Flux"].iloc[-1, i]
                     dTwi.append(getDT(abs(objectif), flow, PowerCh, TwH[i], Pressure))
                     Ti.append(TwH[i] + dTwi[-1])
-                    hi.append(getHeatCoeff(flow, d, Umean, TwH[i]))
+                    hi.append(
+                        getHeatCoeff(d, Lh[i], Umean, TwH[i], Pressure, dPressure)
+                    )
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                     f.addParameterInModelProperties(p_params["h"][i], hi[-1])
                     parameters[p_params["h"][i]] = hi[-1]
@@ -411,10 +427,24 @@ def solve(
                 Tw = [float(parameters[p]) for p in p_params["Tw"]]
                 dTw = [float(parameters[p]) for p in p_params["dTw"]]
                 hw = [float(parameters[p]) for p in p_params["hw"]]
+                L = [
+                    abs(
+                        float(parameters[p])
+                        - float(parameters[p.replace("max", "min")])
+                    )
+                    for p in p_params["Zmax"]
+                ]
 
                 for i, T in enumerate(Tw):
                     dTg = getDT(abs(objectif), flow, PowerM, Tw[i], Pressure)
-                    hg = getHeatCoeff(flow, sum(Dh) / float(len(Dh)), Umean, Tw[i])
+                    hg = getHeatCoeff(
+                        sum(Dh) / float(len(Dh)),
+                        L[i],
+                        Umean,
+                        Tw[i],
+                        Pressure,
+                        dPressure,
+                    )
                     f.addParameterInModelProperties(p_params["dTw"][i], dTg)
                     f.addParameterInModelProperties(p_params["hw"][i], hg)
                     parameters[p_params["hw"][i]] = hg
