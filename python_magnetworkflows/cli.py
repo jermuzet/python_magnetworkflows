@@ -12,7 +12,6 @@ import json
 
 from .waterflow import waterflow
 from .real_methods import getDT, getHeatCoeff
-from .real_methods import getMinT, getMeanT, getMaxT
 
 from .oneconfig import oneconfig
 
@@ -170,7 +169,6 @@ def main():
                     "rematch": f"Statistics_Stat_T_{filter}\\w*min",
                     "params": [],
                     "control_params": [],
-                    "value": (getMinT),
                     "unit": "K",
                     "post": {"type": "Statistics_Stat_T", "math": "min"},
                 }
@@ -180,7 +178,6 @@ def main():
                     "rematch": f"Statistics_Stat_T_{filter}\\w*mean",
                     "params": [],
                     "control_params": [],
-                    "value": (getMeanT),
                     "unit": "K",
                     "post": {"type": "Statistics_Stat_T", "math": "mean"},
                 }
@@ -190,7 +187,6 @@ def main():
                     "rematch": f"Statistics_Stat_T_{filter}\\w*max",
                     "params": [],
                     "control_params": [],
-                    "value": (getMaxT),
                     "unit": "K",
                     "post": {"type": "Statistics_Stat_T", "math": "max"},
                 }
@@ -200,7 +196,6 @@ def main():
                     "rematch": f"Statistics_T_{filter}\\w+\\d+_min",
                     "params": [],
                     "control_params": [],
-                    "value": (getMinT),
                     "unit": "K",
                     "post": {"type": "Statistics_T", "math": "min"},
                 }
@@ -210,7 +205,6 @@ def main():
                     "rematch": f"Statistics_T_{filter}\\w+\\d+_mean",
                     "params": [],
                     "control_params": [],
-                    "value": (getMeanT),
                     "unit": "K",
                     "post": {"type": "Statistics_T", "math": "mean"},
                 }
@@ -220,7 +214,6 @@ def main():
                     "rematch": f"Statistics_T_{filter}\\w+\\d+_max",
                     "params": [],
                     "control_params": [],
-                    "value": (getMaxT),
                     "unit": "K",
                     "post": {"type": "Statistics_T", "math": "max"},
                 }
@@ -292,7 +285,6 @@ def main():
                     "rematch": f"Statistics_Stat_T_{filter}\\w*min",
                     "params": [],
                     "control_params": [],
-                    "value": (getMinT),
                     "unit": "K",
                     "post": {"type": "Statistics_Stat_T", "math": "min"},
                 }
@@ -302,7 +294,6 @@ def main():
                     "rematch": f"Statistics_Stat_T_{filter}\\w*mean",
                     "params": [],
                     "control_params": [],
-                    "value": (getMeanT),
                     "unit": "K",
                     "post": {"type": "Statistics_Stat_T", "math": "mean"},
                 }
@@ -312,7 +303,6 @@ def main():
                     "rematch": f"Statistics_Stat_T_{filter}\\w*max",
                     "params": [],
                     "control_params": [],
-                    "value": (getMaxT),
                     "unit": "K",
                     "post": {"type": "Statistics_Stat_T", "math": "max"},
                 }
@@ -322,7 +312,6 @@ def main():
                     "rematch": f"Statistics_T_{filter}\\w+_B\\D_min",
                     "params": [],
                     "control_params": [],
-                    "value": (getMinT),
                     "unit": "K",
                     "post": {"type": "Statistics_T", "math": "min"},
                 }
@@ -332,7 +321,6 @@ def main():
                     "rematch": f"Statistics_T_{filter}\\w+_B\\D_mean",
                     "params": [],
                     "control_params": [],
-                    "value": (getMeanT),
                     "unit": "K",
                     "post": {"type": "Statistics_T", "math": "mean"},
                 }
@@ -342,7 +330,6 @@ def main():
                     "rematch": f"Statistics_T_{filter}\\w+_B\\D_max",
                     "params": [],
                     "control_params": [],
-                    "value": (getMaxT),
                     "unit": "K",
                     "post": {"type": "Statistics_T", "math": "max"},
                 }
@@ -369,15 +356,6 @@ def main():
         print(f"targets: {targets.keys()}")
 
     """
-    # pvalues: dict for params key->actual target in targets
-    pvalues = {
-        "Flux" : "Flux",
-        "PowerM" : "PowerM",
-        "PowerH" : "PowerH",
-        "HeatCoeff" : "HeatCoeff",
-        "DT" : "DT"
-    }
-        
     postvalues = {
         "T": ['MinTH', 'MeanTH', 'MaxTH', 'PowerH'],
         "Stress": ['MinVonMises', 'MinHoop', 'MeanVonMises', 'MeanHoop', 'MaxVonMises', 'MaxHoop']
