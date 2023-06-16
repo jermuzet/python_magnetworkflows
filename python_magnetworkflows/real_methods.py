@@ -44,11 +44,13 @@ from .waterflow import waterflow, rho, Cp
 # For Heat exchange
 
 
-def getDT(
-    objectif: float, waterflow: waterflow, Power: float, Tw: float, P: float
-) -> float:
+def getDT(objectif: float, flow: float, Power: float, Tw: float, P: float) -> float:
     # compute dT as Power / rho *Cp * Flow(I)
-    return Power / (rho(Tw, P) * Cp(Tw, P) * waterflow.flow(objectif))
+    DT = Power / (rho(Tw, P) * Cp(Tw, P) * flow)
+    # print(
+    #     f"GETDT={DT} objectif: {objectif}, flow: {flow}, Power: {Power}, Tw: {Tw}, P: {P}"
+    # )
+    return DT
 
 
 def getHeatCoeff(waterflow: waterflow, Dh: float, U: float, Tw: float):
@@ -76,7 +78,9 @@ def getTout(
 ) -> float:
     Tout = 0
     rhoCpQ = 0
+    # print(f"Sum(Qi)={sum(Q)}")
     for i, (Ti, RHOi, CPi, Qi) in enumerate(zip(T, VolMass, SpecHeat, Q)):
+        # print(f"i:{i}, (Ti:{Ti}, RHOi:{RHOi}, CPi:{CPi}, Qi:{Qi})")
         Tout += Ti * RHOi * CPi * Qi
         rhoCpQ += RHOi * CPi * Qi
 
