@@ -70,11 +70,9 @@ class waterflow:
         return cls(Vpump0, Vpmax, F0_l_per_second, Fmax_l_per_second, Pmax, Pmin, Imax)
 
     def vpump(self, objectif: float) -> float:
-        Vpump = self.Vpmax
+        Vpump = self.Vpmax + self.Vpump0
         if objectif <= self.Imax:
-            Vpump = (
-                self.Vpump0 + (self.Vpmax - self.Vpump0) * (objectif / self.Imax) ** 2
-            )
+            Vpump = self.Vpmax * (objectif / self.Imax) ** 2 + self.Vpump0
 
         return Vpump
 
@@ -89,7 +87,10 @@ class waterflow:
         ]
         F0 = Quantity(self.F0_l_per_second, units[0]).to(units[1]).magnitude
         Fmax = Quantity(self.Fmax_l_per_second, units[0]).to(units[1]).magnitude
-        return F0 + Fmax * self.vpump(objectif) / self.Vpmax
+        F = F0 + Fmax
+        if objectif <= self.Imax:
+            F = F0 + Fmax * self.vpump(objectif) / (self.Vpmax + self.Vpump0)
+        return F
 
     def pressure(self, objectif: float) -> float:
         """
