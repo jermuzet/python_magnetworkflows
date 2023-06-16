@@ -68,6 +68,8 @@ def oneconfig(
                 "MeanTH": pd.DataFrame(),
             },
             "target": values["objectif"],
+            "flow": 0,
+            "Tout": 0,
         }
 
     # capture actual params per target:
