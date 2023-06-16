@@ -229,6 +229,10 @@ def solve(
             # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
             filtered_df = getTarget(targets, target, e, args.debug)
 
+            relax = 0.0
+            if values["type"] == "bitter":
+                relax = 0.8
+
             # TODO: add stats for filtered_df to table_: mean, ecart type, min/max??
 
             error = filtered_df.div(-objectif).add(1)
@@ -397,8 +401,6 @@ def solve(
                     )
                     print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
-                relax = 0.8
-
                 dTwi = []
                 Ti = []
                 hi = []
@@ -409,7 +411,9 @@ def solve(
                     cname = p_params["Dh"][i].replace("_Dh", "")
                     PowerCh = dict_df[target]["Flux"].iloc[-1, i]
                     Q.append(Umean * s)
-                    dTwi.append(getDT(Q[-1], PowerCh, TwH[i], dTwH[i], Pressure, relax))
+                    dTwi.append(
+                        getDT(Q[-1], PowerCh, TwH[i], dTwH[i], Pressure, relax=relax)
+                    )
                     Ti.append(TwH[i] + dTwi[-1])
                     hi.append(
                         getHeatCoeff(

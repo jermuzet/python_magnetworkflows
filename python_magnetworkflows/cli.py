@@ -236,6 +236,7 @@ def main():
 
                 targets[f"{filter}I"] = {
                     "objectif": values["value"],
+                    "type": "helix",
                     "csv": "heat.measures/values.csv",
                     "rematch": f"Statistics_Intensity_{filter}H\\w+_integrate",
                     "params": [("N", f"N_{filter}\\w+")],
@@ -354,6 +355,7 @@ def main():
 
                 targets[f"{filter}I"] = {
                     "objectif": values["value"],
+                    "type": "bitter",
                     "csv": "heat.measures/values.csv",
                     "rematch": f"Statistics_Intensity_{filter}\\w+_integrate",
                     "params": [("N", f"N_{filter}\\w+")],
