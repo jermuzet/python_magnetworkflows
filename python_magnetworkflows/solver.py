@@ -323,16 +323,30 @@ def solve(
             PowerM = dict_df[target]["PowerM"].iloc[-1, 0]
             SPower_H = dict_df[target]["PowerH"].iloc[-1].sum()
             SFlux_H = dict_df[target]["Flux"].iloc[-1].sum()
+
+            Powers_Diff = abs(PowerM - SPower_H)
+            PowerFlux_Diff = abs(PowerM - SFlux_H)
             if e.isMasterRank():
                 print("PowerM : ", dict_df[target]["PowerM"])
                 print(f'{target}: PowerH {dict_df[target]["PowerH"]}')
                 print(
-                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={dict_df[target]["PowerH"].iloc[-1]}'
+                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={dict_df[target]["PowerH"].iloc[-1]} Ucoil={dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}'
+                )
+
+                print(
+                    f"{target}: it={it} Power-SPower_H={Powers_Diff}     Power-SFlux_H={PowerFlux_Diff}"
                 )
 
                 if args.debug:
                     for key in p_params:
                         print(f"{target}: {key}={p_params[key]}")
+
+            assert (
+                Powers_Diff / PowerM < 1e-3
+            ), f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM} SPower_H={SPower_H}"
+            assert (
+                PowerFlux_Diff / PowerM < 5e-2
+            ), f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM} SFlux_H={SFlux_H}"
 
             flow = values["waterflow"]
             Pressure = flow.pressure(abs(objectif))
@@ -341,19 +355,20 @@ def solve(
             Sh = [float(parameters[p]) for p in p_params["Sh"]]
             if args.debug and e.isMasterRank():
                 print(f'Dh: {p_params["Dh"]}')
-                print(f'hwH: {p_params["h"]}')
+                print(f'hwH: {p_params["hwH"]}')
 
             Umean = flow.umean(abs(objectif), sum(Sh))  # math.fsum(Sh)
             if e.isMasterRank():
                 print(
-                    f"{target}: it={it}, objectif={abs(objectif)}, Umean={Umean}, Flow={flow}"
+                    f"{target}: it={it}, objectif={abs(objectif)}, Umean={Umean}, Flow={flow.flow(abs(objectif))}"
                 )
+            dict_df[target]["flow"] = flow.flow(abs(objectif))
 
             # per Channel/Slit
             if "H" in args.cooling:
                 TwH = [float(parameters[p]) for p in p_params["TwH"]]
                 dTwH = [float(parameters[p]) for p in p_params["dTwH"]]
-                hwH = [float(parameters[p]) for p in p_params["h"]]
+                hwH = [float(parameters[p]) for p in p_params["hwH"]]
 
                 # TODO verify if data are consistant??
                 if e.isMasterRank():
@@ -371,24 +386,30 @@ def solve(
                 for i, (d, s) in enumerate(zip(Dh, Sh)):
                     cname = p_params["Dh"][i].replace("_Dh", "")
                     PowerCh = dict_df[target]["Flux"].iloc[-1, i]
-                    dTwi.append(getDT(abs(objectif), flow, PowerCh, TwH[i], Pressure))
+                    Q.append(Umean * s)
+                    dTwi.append(getDT(abs(objectif), Q[-1], PowerCh, TwH[i], Pressure))
                     Ti.append(TwH[i] + dTwi[-1])
-                    hi.append(getHeatCoeff(flow, d, Umean, TwH[i]))
+                    hi.append(getHeatCoeff(flow, d, Umean, TwH[i] + dTwi[-1] / 2.0))
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
-                    f.addParameterInModelProperties(p_params["h"][i], hi[-1])
-                    parameters[p_params["h"][i]] = hi[-1]
+                    f.addParameterInModelProperties(p_params["hwH"][i], hi[-1])
+                    parameters[p_params["hwH"][i]] = hi[-1]
                     parameters[p_params["dTwH"][i]] = dTwi[-1]
-                    dict_df[target]["HeatCoeff"][p_params["h"][i]] = [hi[-1]]
+                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[-1]]
                     dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[-1]]
 
                     if e.isMasterRank():
                         print(
-                            f'{target} Channel{i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, param={p_params["dTwH"][i]}, dTwi={dTwi[i]}, hi={hi[i]}'
+                            f"{target} {i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, dTwH={dTwH[i]}, hwH=={hwH[i]}, dTwi={dTwi[i]}, hi={hi[i]}"
                         )
 
                     VolMass.append(rho(TwH[i] + dTwi[-1] / 2.0, Pressure))
                     SpecHeat.append(Cp(TwH[i] + dTwi[-1] / 2.0, Pressure))
-                    Q.append(Umean * s)
+
+                if e.isMasterRank():
+                    print(f"Q-flow={sum(Q)-flow.flow(abs(objectif))}")
+                    print(
+                        f"len(Ti)={len(Ti)}  len(VolMass)={len(VolMass)} len(SpecHeat)={len(SpecHeat)} len(Dh)={len(Dh)}  len(Sh)={len(Sh)}"
+                    )
 
                 # TODO compute an estimate of dTg
                 # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
@@ -404,7 +425,10 @@ def solve(
 
                 dTg = Tout - TwH[0]
                 if e.isMasterRank():
-                    print(f"{target} Tout={Tout}, Tw={TwH[0]}, dTg={dTg}")
+                    print(
+                        f"{target}: Tout={Tout}  Tw={TwH[0]}, umean={Umean}, Power={PowerM}, dTg={dTg} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif)))})"
+                    )
+                dict_df[target]["Tout"] = Tout
 
             # global:  what to do when len(Tw) != 1
             else:
@@ -413,8 +437,14 @@ def solve(
                 hw = [float(parameters[p]) for p in p_params["hw"]]
 
                 for i, T in enumerate(Tw):
-                    dTg = getDT(abs(objectif), flow, PowerM, Tw[i], Pressure)
-                    hg = getHeatCoeff(flow, sum(Dh) / float(len(Dh)), Umean, Tw[i])
+                    if e.isMasterRank():
+                        print(f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}")
+                    dTg = getDT(
+                        abs(objectif), flow.flow(abs(objectif)), PowerM, Tw[i], Pressure
+                    )
+                    hg = getHeatCoeff(
+                        flow, sum(Dh) / float(len(Dh)), Umean, Tw[i] + dTg / 2.0
+                    )
                     f.addParameterInModelProperties(p_params["dTw"][i], dTg)
                     f.addParameterInModelProperties(p_params["hw"][i], hg)
                     parameters[p_params["hw"][i]] = hg
@@ -427,6 +457,7 @@ def solve(
                     print(
                         f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={PowerM}, dTg={dTg}, hg={hg}'
                     )
+                dict_df[target]["Tout"] = Tw[0] + dTg
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
 
