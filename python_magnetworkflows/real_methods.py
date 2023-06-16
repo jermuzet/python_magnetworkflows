@@ -44,20 +44,24 @@ from .waterflow import waterflow, rho, Cp
 # For Heat exchange
 
 
-def getDT(objectif: float, flow: float, Power: float, Tw: float, P: float) -> float:
+def getDT(
+    flow: float, Power: float, Tw: float, dTw: float, P: float, relax: float = 0.0
+) -> float:
     # compute dT as Power / rho *Cp * Flow(I)
     DT = Power / (rho(Tw, P) * Cp(Tw, P) * flow)
     # print(
     #     f"GETDT={DT} objectif: {objectif}, flow: {flow}, Power: {Power}, Tw: {Tw}, P: {P}"
     # )
-    return DT
+    return (1 - relax) * DT + relax * dTw
 
 
-def getHeatCoeff(waterflow: waterflow, Dh: float, U: float, Tw: float):
+def getHeatCoeff(
+    waterflow: waterflow, Dh: float, U: float, Tw: float, hw: float, relax: float = 0.0
+):
     # compute h as Montgomery()
     # P = pressure(objectif)
     # dTw = setDT(objectif, Power, Tw, P)
-    return waterflow.montgomery(Tw, U, Dh)
+    return (1 - relax) * waterflow.montgomery(Tw, U, Dh) + relax * hw
 
 
 # Temperature

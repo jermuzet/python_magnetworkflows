@@ -218,6 +218,8 @@ def solve(
         # TODO: get csv to look for depends on cfpdes model used
         table_ = [it]
         err_max = 0
+        err_max_dT = 0
+        err_max_h = 0
         List_Tout = []
         List_VolMassout = []
         List_SpecHeatout = []
@@ -364,6 +366,8 @@ def solve(
                 )
             dict_df[target]["flow"] = flow.flow(abs(objectif))
 
+            error_dT = []
+            error_h = []
             # per Channel/Slit
             if "H" in args.cooling:
                 TwH = [float(parameters[p]) for p in p_params["TwH"]]
@@ -377,6 +381,8 @@ def solve(
                     )
                     print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
+                relax = 0.8
+
                 dTwi = []
                 Ti = []
                 hi = []
@@ -387,9 +393,13 @@ def solve(
                     cname = p_params["Dh"][i].replace("_Dh", "")
                     PowerCh = dict_df[target]["Flux"].iloc[-1, i]
                     Q.append(Umean * s)
-                    dTwi.append(getDT(abs(objectif), Q[-1], PowerCh, TwH[i], Pressure))
+                    dTwi.append(getDT(Q[-1], PowerCh, TwH[i], dTwH[i], Pressure, relax))
                     Ti.append(TwH[i] + dTwi[-1])
-                    hi.append(getHeatCoeff(flow, d, Umean, TwH[i] + dTwi[-1] / 2.0))
+                    hi.append(
+                        getHeatCoeff(
+                            flow, d, Umean, TwH[i] + dTwi[-1] / 2.0, hwH[i], relax
+                        )
+                    )
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                     f.addParameterInModelProperties(p_params["hwH"][i], hi[-1])
                     parameters[p_params["hwH"][i]] = hi[-1]
@@ -397,9 +407,12 @@ def solve(
                     dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[-1]]
                     dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[-1]]
 
+                    error_dT.append(abs(1 - (dTwH[i] / dTwi[-1])))
+                    error_h.append(abs(1 - (hwH[i] / hi[-1])))
+
                     if e.isMasterRank():
                         print(
-                            f"{target} {i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, dTwH={dTwH[i]}, hwH=={hwH[i]}, dTwi={dTwi[i]}, hi={hi[i]}"
+                            f"{target} {i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, dTwH={dTwH[i]}, hwH={hwH[i]}, dTwi={dTwi[i]}, hi={hi[i]}"
                         )
 
                     VolMass.append(rho(TwH[i] + dTwi[-1] / 2.0, Pressure))
@@ -450,6 +463,9 @@ def solve(
                     parameters[p_params["hw"][i]] = hg
                     parameters[p_params["dTw"][i]] = dTg
 
+                    error_dT.append(abs(1 - (dTw[i] / dTg)))
+                    error_h.append(abs(1 - (hw[i] / hg)))
+
                     dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [hg]
                     dict_df[target]["DT"][p_params["dTw"][i]] = [dTg]
 
@@ -460,6 +476,9 @@ def solve(
                 dict_df[target]["Tout"] = Tw[0] + dTg
 
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
+
+            err_max_dT = max(err_max_dT, max(error_dT))
+            err_max_h = max(err_max_h, max(error_h))
 
         if "H" in args.cooling and len(List_Tout) > 1:
             Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
@@ -472,7 +491,9 @@ def solve(
         f.updateParameterValues()
 
         if e.isMasterRank():
-            print(f"it={it}, err_max={err_max}, eps={args.eps}, itmax={args.itermax}")
+            print(
+                f"it={it}, err_max={err_max}, err_max_dT={err_max_dT}, err_max_h={err_max_h}, eps={args.eps}, itmax={args.itermax}"
+            )
 
         table_.append(err_max)
         table.append(table_)
@@ -483,7 +504,11 @@ def solve(
             print("create_field : done")
             update(jsonmodel, parameters)
 
-        if err_max <= args.eps:
+        if (
+            err_max <= args.eps
+            and err_max_dT <= max(args.eps, 1e-3)
+            and err_max_h <= max(args.eps, 1e-2)
+        ):
             break
 
         # reload feelpp
