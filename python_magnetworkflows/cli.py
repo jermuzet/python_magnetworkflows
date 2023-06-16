@@ -147,7 +147,7 @@ def main():
                         ("Dh", f"{filter}Dh\\d+"),
                         ("Sh", f"{filter}Sh\\d+"),
                         ("hw", f"{filter}hw"),
-                        ("h", f"{filter}hw\\d+"),
+                        ("hwH", f"{filter}hw\\d+"),
                     ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
@@ -269,7 +269,7 @@ def main():
                         ("Dh", f"{filter}\\w+Dh"),
                         ("Sh", f"{filter}\\w+Sh"),
                         ("hw", f"{filter}\\w+hw", "\\w+_Slit\\w+", False),
-                        ("h", f"{filter}\\w+hw", "\\w+_Slit\\w+", True),
+                        ("hwH", f"{filter}\\w+hw", "\\w+_Slit\\w+", True),
                     ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
@@ -401,23 +401,52 @@ def main():
     )
 
     if rank == 0:
+        table_final = pd.DataFrame(["values"], columns=["measures"])
+
         for target, values in dict_df.items():
+            mname = target[:-2]
+            table_final[f"{mname}_flow[l/s]"] = dict_df[target]["flow"] * 1e3
+            table_final[f"{mname}_Tout[K]"] = dict_df[target]["Tout"]
+            print("\n")
             for key, df in values.items():
                 if key in ["DT", "HeatCoeff"]:
-                    outdir = f"{target[:-2]}_{key}.measures"
+                    outdir = f"{mname}_{key}.measures"
                     if not os.path.exists(outdir):
                         os.mkdir(outdir)
                     df.to_csv(f"{outdir}/values_noT.csv", index=True)
                 if isinstance(df, pd.DataFrame):
-                    df = df.T
-                    outdir = f"{target[:-2]}_{key}.measures"
+                    df_T = df.T
+                    outdir = f"{mname}_{key}.measures"
                     if not os.path.exists(outdir):
                         os.mkdir(outdir)
-                    df.to_csv(f"{outdir}/values.csv", index=True)
+                    df_T.to_csv(f"{outdir}/values.csv", index=True)
+
+                    if key == "PowerM":
+                        table_final[f"{mname}_PowerM[MW]"] = df_T.iloc[0, 0] * 1e-6
+                    elif key == "PowerH":
+                        dfUcoil = df / dict_df[target]["target"]
+                        for (columnName, columnData) in dfUcoil.iteritems():
+                            if "H" in columnName:
+                                nH = int(columnName.split("H", 1)[1])
+
+                                Uname = f"{mname}_Ucoil_H{nH-1}H{nH}[V]"
+                                if nH % 2:
+                                    Uname = f"{mname}_Ucoil_H{nH}H{nH+1}[V]"
+
+                                if Uname in table_final.columns:
+                                    table_final[Uname] += columnData.iloc[-1]
+                                else:
+                                    table_final[Uname] = columnData.iloc[-1]
+
+                            else:
+                                table_final[
+                                    f"{mname}_Ucoil_{columnName}[V]"
+                                ] = columnData.iloc[-1]
+
                 if key in ["statsT", "statsTH"]:
                     list_dfT = [dfT for keyT, dfT in df.items()]
-                    dfT = pd.concat(list_dfT).T
-                    outdir = f"{target[:-2]}_{key}.measures"
+                    dfT = pd.concat(list_dfT, sort=True).T
+                    outdir = f"{mname}_{key}.measures"
                     if not os.path.exists(outdir):
                         os.mkdir(outdir)
                     dfT.to_csv(f"{outdir}/values.csv", index=True)
@@ -426,6 +455,15 @@ def main():
         if not os.path.exists(outdir):
             os.mkdir(outdir)
         table.to_csv(f"{outdir}/values.csv", index=False)
+
+        if "mag" in args.cfgfile:
+            df = pd.read_csv("magnetic.measures/values.csv")
+            table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
+
+        table_final.set_index("measures", inplace=True)
+        table_final.T.to_csv(f"measures.csv", index=True)
+
+        print(table_final.T)
 
     return 0
 
