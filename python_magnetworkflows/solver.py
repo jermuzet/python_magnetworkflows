@@ -229,6 +229,10 @@ def solve(
             # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
             filtered_df = getTarget(targets, target, e, args.debug)
 
+            relax = 0.0
+            if values["type"] == "bitter":
+                relax = 0.8
+
             # TODO: add stats for filtered_df to table_: mean, ecart type, min/max??
 
             error = filtered_df.div(-objectif).add(1)
@@ -356,17 +360,12 @@ def solve(
 
             Dh = [float(parameters[p]) for p in p_params["Dh"]]
             Sh = [float(parameters[p]) for p in p_params["Sh"]]
-            Lh = [
-                abs(float(parameters[p]) - float(parameters[p.replace("max", "min")]))
-                for p in p_params["Zmax"]
-            ]
             if args.debug and e.isMasterRank():
                 i = 0
                 for p in p_params["Dh"]:
                     print(f"Dh[{i}]: key={p}, value={float(parameters[p])}")
                     i += 1
                 print(f'Dh: {p_params["Dh"]}')
-                print(f'hwH: {p_params["hwH"]}')
 
             Umean = flow.umean(abs(objectif), sum(Sh))  # math.fsum(Sh)
             if e.isMasterRank():
@@ -382,9 +381,16 @@ def solve(
                 TwH = [float(parameters[p]) for p in p_params["TwH"]]
                 dTwH = [float(parameters[p]) for p in p_params["dTwH"]]
                 hwH = [float(parameters[p]) for p in p_params["hwH"]]
+                Lh = [
+                    abs(
+                        float(parameters[p])
+                        - float(parameters[p.replace("max", "min")])
+                    )
+                    for p in p_params["ZmaxH"]
+                ]
 
                 i = 0
-                for p in p_params["h"]:
+                for p in p_params["hwH"]:
                     print(f"hwH[{i}]: key={p}, value={float(parameters[p])}")
                     i += 1
 
@@ -394,8 +400,6 @@ def solve(
                         f"{target}: len(Dh)={len(Dh)}, len(TwH)={len(TwH)}, len(dTwH)={len(dTwH)}, len(Channels/Slits)={len(hwH)}"
                     )
                     print(f'{target} Flux: {dict_df[target]["Flux"]}')
-
-                relax = 0.8
 
                 dTwi = []
                 Ti = []
@@ -407,10 +411,22 @@ def solve(
                     cname = p_params["Dh"][i].replace("_Dh", "")
                     PowerCh = dict_df[target]["Flux"].iloc[-1, i]
                     Q.append(Umean * s)
-                    dTwi.append(getDT(Q[-1], PowerCh, TwH[i], dTwH[i], Pressure, relax))
+                    dTwi.append(
+                        getDT(Q[-1], PowerCh, TwH[i], dTwH[i], Pressure, relax=relax)
+                    )
                     Ti.append(TwH[i] + dTwi[-1])
                     hi.append(
-                        getHeatCoeff(d, Lh[i], Umean, TwH[i] + dTwi[-1] / 2.0, Pressure, dPressure, hwH[i], relax)
+                        getHeatCoeff(
+                            d,
+                            Lh[i],
+                            Umean,
+                            TwH[i] + dTwi[-1] / 2.0,
+                            hwH[i],
+                            Pressure,
+                            dPressure,
+                            model=args.heatcorrelation,
+                            relax=relax,
+                        )
                     )
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                     f.addParameterInModelProperties(p_params["hwH"][i], hi[-1])
@@ -471,14 +487,18 @@ def solve(
                 for i, T in enumerate(Tw):
                     if e.isMasterRank():
                         print(f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}")
-                    dTg = getDT(abs(objectif), flow.flow(abs(objectif)), PowerM, Tw[i], Pressure)
+                    dTg = getDT(
+                        flow.flow(abs(objectif)), PowerM, Tw[i], dTw[i], Pressure
+                    )
                     hg = getHeatCoeff(
                         sum(Dh) / float(len(Dh)),
                         L[i],
                         Umean,
                         Tw[i] + dTg / 2.0,
+                        hw[i],
                         Pressure,
                         dPressure,
+                        model=args.heatcorrelation,
                     )
                     f.addParameterInModelProperties(p_params["dTw"][i], dTg)
                     f.addParameterInModelProperties(p_params["hw"][i], hg)

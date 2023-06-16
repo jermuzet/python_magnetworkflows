@@ -62,11 +62,11 @@ def getHeatCoeff(
     L: float,
     U: float,
     Tw: float,
+    hw: float,
     Pw: float,
     dPw: float,
     model: str = "Montgomery",
-    hw: float,
-    relax: float = 0.0
+    relax: float = 0.0,
 ):
     correlation = {
         "Montgomery": Montgomery,
@@ -74,9 +74,9 @@ def getHeatCoeff(
         "Colburn": Colburn,
         "Silverberg": Silverberg,
     }
-    
+
     h = correlation[model](Tw, Pw, dPw, U, Dh, L)
-    return (1 -relax) * h + relax * hw
+    return (1 - relax) * h + relax * hw
 
 
 def getTout(
