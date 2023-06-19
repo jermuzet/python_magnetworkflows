@@ -15,7 +15,7 @@ import pandas as pd
 
 from .params import getTarget, getparam
 from .waterflow import waterflow as w
-from .cooling import rho, Cp
+from .cooling import rho, Cp, Uw
 from .real_methods import getDT, getHeatCoeff, getTout
 
 
@@ -409,25 +409,44 @@ def solve(
                 Q = []
                 for i, (d, s) in enumerate(zip(Dh, Sh)):
                     cname = p_params["Dh"][i].replace("_Dh", "")
+                    print(f"cname={cname}, i={i}")
                     PowerCh = dict_df[target]["Flux"].iloc[-1, i]
-                    Q.append(Umean * s)
-                    dTwi.append(
-                        getDT(Q[-1], PowerCh, TwH[i], dTwH[i], Pressure, relax=relax)
-                    )
-                    Ti.append(TwH[i] + dTwi[-1])
-                    hi.append(
-                        getHeatCoeff(
+                    
+                    U = Umean
+                    tmp_dTwi = dTwH[i]
+                    tmp_hi = hwH[i]
+                    print(f"cname={cname}, i={i}, U={U}, tmp_dTwi={tmp_dTwi}, tmp_hi={tmp_hi}")
+                    while True:
+                        tmp_flow = U * s
+                        tmp_dTwi = getDT(tmp_flow, PowerCh, TwH[i], dTwH[i], Pressure)
+                        
+                        tmp_hi = getHeatCoeff(
                             d,
                             Lh[i],
-                            Umean,
-                            TwH[i] + dTwi[-1] / 2.0,
+                            U,
+                            TwH[i] + tmp_dTwi / 2.0,
                             hwH[i],
                             Pressure,
                             dPressure,
                             model=args.heatcorrelation,
-                            relax=relax,
+                            friction=args.friction
                         )
-                    )
+                        
+                        if args.heatcorrelation != "Montgomery":
+                            tmp_U = Uw(TwH[i] + tmp_dTwi / 2.0, Pressure, dPressure, d, Lh[i], friction=args.friction, uguess=U)
+                            n_tmp_flow = tmp_U * s
+                            U = tmp_U
+
+                            if abs(1 - n_tmp_flow / tmp_flow) <= 1.e-3:
+                                break
+                        else:
+                            break
+
+                    Q.append(tmp_flow)
+                    dTwi.append((1.-relax)*tmp_dTwi+relax*dTwH[i])
+                    Ti.append(TwH[i] + dTwi[-1])
+                    hi.append((1.-relax)*tmp_hi+relax*dTwH[i])
+
                     f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                     f.addParameterInModelProperties(p_params["hwH"][i], hi[-1])
                     parameters[p_params["hwH"][i]] = hi[-1]
@@ -440,7 +459,7 @@ def solve(
 
                     if e.isMasterRank():
                         print(
-                            f"{target} {i}: cname={cname}, umean={Umean}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, dTwH={dTwH[i]}, hwH={hwH[i]}, dTwi={dTwi[i]}, hi={hi[i]}"
+                            f"{target} {i}: cname={cname}, u={U}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, dTwH={dTwH[i]}, hwH={hwH[i]}, dTwi={dTwi[i]}, hi={hi[i]}"
                         )
 
                     VolMass.append(rho(TwH[i] + dTwi[-1] / 2.0, Pressure))
@@ -467,7 +486,7 @@ def solve(
                 dTg = Tout - TwH[0]
                 if e.isMasterRank():
                     print(
-                        f"{target}: Tout={Tout}  Tw={TwH[0]}, umean={Umean}, Power={PowerM}, dTg={dTg} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif)))})"
+                        f"{target}: Tout={Tout}  Tw={TwH[0]}, U={Umean}, Power={PowerM}, dTg={dTg} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif)))})"
                     )
                 dict_df[target]["Tout"] = Tout
 
@@ -499,6 +518,7 @@ def solve(
                         Pressure,
                         dPressure,
                         model=args.heatcorrelation,
+                        friction=args.friction,
                     )
                     f.addParameterInModelProperties(p_params["dTw"][i], dTg)
                     f.addParameterInModelProperties(p_params["hw"][i], hg)

@@ -1,42 +1,4 @@
-"""
-def getCurrent(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_Intensity_{marker}_integrate"].iloc[-1]
 
-def getPower(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_Power_{marker}_integrate"].iloc[-1]
-
-# Stress
-def getMinHoop(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_Stress_{marker}_min"].iloc[-1]
-
-def getMeanHoop(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_Stress_{marker}_mean"].iloc[-1]
-
-def getMaxHoop(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_Stress_{marker}_max"].iloc[-1]
-
-def getMinVonMises(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_VonMises_{marker}_min"].iloc[-1]
-
-def getMeanVonMises(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_VonMises_{marker}_mean"].iloc[-1]
-
-def getMaxVonMises(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_VonMises_{marker}_max"].iloc[-1]
-
-# Temperature
-def getMeanT(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_MeanT_{marker}_mean"].iloc[-1]
-
-def getMaxT(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_MaxT_{marker}_max"].iloc[-1]
-
-def getMinT(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_MaxT_{marker}_min"].iloc[-1]
-
-def getFlux(df: pd.DataFrame, marker: str):
-    return df[f"Statistics_Flux_{marker}_integrate"].iloc[-1]
-"""
 import pandas as pd
 from typing import List
 from .waterflow import waterflow
@@ -66,6 +28,7 @@ def getHeatCoeff(
     Pw: float,
     dPw: float,
     model: str = "Montgomery",
+    friction: str = "Constant",
     relax: float = 0.0,
 ):
     correlation = {
@@ -75,7 +38,7 @@ def getHeatCoeff(
         "Silverberg": Silverberg,
     }
 
-    h = correlation[model](Tw, Pw, dPw, U, Dh, L)
+    h = correlation[model](Tw, Pw, dPw, U, Dh, L, friction)
     return (1 - relax) * h + relax * hw
 
 
