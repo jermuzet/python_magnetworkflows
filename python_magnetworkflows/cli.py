@@ -157,12 +157,12 @@ def main():
                 HeatCoeff = {
                     "name": "HeatCoeff",
                     "params": [
-                        ("Dh", f"{filter}Dh\\d+"),
-                        ("Sh", f"{filter}Sh\\d+"),
-                        ("hw", f"{filter}hw"),
-                        ("hwH", f"{filter}hw\\d+"),
-                        ("Zmax", f"{filter}Zmax"),
-                        ("ZmaxH", f"{filter}Zmax\\d+"),
+                        ("Dh", f"{filter}Channel\\d+_Dh"),
+                        ("Sh", f"{filter}Channel\\d+_Sh"),
+                        ("hw", f"{filter}Channel_hw"),
+                        ("hwH", f"{filter}Channel\\d+_hw"),
+                        ("Zmax", f"{filter}Channel_Zmax"),
+                        ("ZmaxH", f"{filter}Channel\\d+_Zmax"),
                     ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
@@ -171,10 +171,10 @@ def main():
                 DT = {
                     "name": "DT",
                     "params": [
-                        ("Tw", f"{filter}Tw"),
-                        ("dTw", f"{filter}dTw"),
-                        ("TwH", f"{filter}Tw\\d+"),
-                        ("dTwH", f"{filter}dTw\\d+"),
+                        ("Tw", f"{filter}Channel_Tw"),
+                        ("dTw", f"{filter}Channel_dTw"),
+                        ("TwH", f"{filter}Channel\\d+_Tw"),
+                        ("dTwH", f"{filter}Channel\\d+_dTw"),
                     ],
                     "value": (getDT),
                     "unit": "K",
