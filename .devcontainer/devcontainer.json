@@ -17,11 +17,6 @@
 		"source=${localWorkspaceFolder}/data,target=/data,type=bind,consistency=cached",
 		"source=/home/singularity,target=/home/singularity,type=bind,consistency=cached"
 	],
-	// Use 'settings' to set *default* container specific settings.json values on container create. 
-	// You can edit these settings after create using File > Preferences > Settings > Remote.
-	"settings": {
-		"terminal.integrated.defaultProfile.linux": "bash"
-	},
 	// Use 'appPort' to create a container with published ports. If the port isn't working, be sure
 	// your server accepts connections from all interfaces (0.0.0.0 or '*'), not just localhost.
 	// "appPort": [],
@@ -51,5 +46,5 @@
 		]
 	},
 	// Comment out the next line if you want to run as root instead
-	"remoteUser": "vscode",
+	"remoteUser": "vscode"
 }
