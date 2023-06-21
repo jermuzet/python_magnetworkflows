@@ -497,7 +497,7 @@ def solve(
                         flow.flow(abs(objectif)), PowerM, Tw[i], dTw[i], Pressure
                     )
                     hg = getHeatCoeff(
-                        sum(Dh) / float(len(Dh)),
+                        Dh[i],
                         L[i],
                         Umean,
                         Tw[i] + dTg / 2.0,
