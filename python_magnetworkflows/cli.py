@@ -157,12 +157,12 @@ def main():
                 HeatCoeff = {
                     "name": "HeatCoeff",
                     "params": [
-                        ("Dh", f"{filter}Channel\\d+_Dh"),
-                        ("Sh", f"{filter}Channel\\d+_Sh"),
-                        ("hw", f"{filter}Channel_hw"),
-                        ("hwH", f"{filter}Channel\\d+_hw"),
-                        ("Zmax", f"{filter}Channel_Zmax"),
-                        ("ZmaxH", f"{filter}Channel\\d+_Zmax"),
+                        ("Dh", f"Dh_{filter}Channel\\d+"),
+                        ("Sh", f"Sh_{filter}Channel\\d+"),
+                        ("hw", f"hw_{filter}Channel"),
+                        ("hwH", f"hw_{filter}Channel\\d+"),
+                        ("Zmax", f"Zmax_{filter}Channel"),
+                        ("ZmaxH", f"Zmax_{filter}Channel\\d+"),
                     ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
@@ -171,10 +171,10 @@ def main():
                 DT = {
                     "name": "DT",
                     "params": [
-                        ("Tw", f"{filter}Channel_Tw"),
-                        ("dTw", f"{filter}Channel_dTw"),
-                        ("TwH", f"{filter}Channel\\d+_Tw"),
-                        ("dTwH", f"{filter}Channel\\d+_dTw"),
+                        ("Tw", f"Tw_{filter}Channel"),
+                        ("dTw", f"dTw_{filter}Channel"),
+                        ("TwH", f"Tw_{filter}Channel\\d+"),
+                        ("dTwH", f"dTw_{filter}Channel\\d+"),
                     ],
                     "value": (getDT),
                     "unit": "K",
@@ -237,6 +237,7 @@ def main():
                 targets[f"{filter}I"] = {
                     "objectif": values["value"],
                     "type": "helix",
+                    "relax": values["relax"],
                     "csv": "heat.measures/values.csv",
                     "rematch": f"Statistics_Intensity_{filter}H\\w+_integrate",
                     "params": [("N", f"N_{filter}\\w+")],
@@ -276,12 +277,12 @@ def main():
                 HeatCoeff = {
                     "name": "HeatCoeff",
                     "params": [
-                        ("Dh", f"{filter}\\w+Dh"),
-                        ("Sh", f"{filter}\\w+Sh"),
-                        ("hw", f"{filter}\\w+hw", "\\w+_Slit\\w+", False),
-                        ("hwH", f"{filter}\\w+hw", "\\w+_Slit\\w+", True),
-                        ("Zmax", f"{filter}\\w+Zmax", "\\w+_Slit\\w+", False),
-                        ("ZmaxH", f"{filter}\\w+Zmax", "\\w+_Slit\\w+", True),
+                        ("Dh", f"Dh_{filter}\\w+"),
+                        ("Sh", f"Sh_{filter}\\w+"),
+                        ("hw", f"hw_{filter}\\w+", "\\w+_Slit\\w+", False),
+                        ("hwH", f"hw_{filter}\\w+", "\\w+_Slit\\w+", True),
+                        ("Zmax", f"Zmax_{filter}\\w+", "\\w+_Slit\\w+", False),
+                        ("ZmaxH", f"Zmax_{filter}\\w+", "\\w+_Slit\\w+", True),
                     ],
                     "value": (getHeatCoeff),
                     "unit": "W/m2/K",
@@ -290,10 +291,10 @@ def main():
                 DT = {
                     "name": "DT",
                     "params": [
-                        ("Tw", f"{filter}\\w+_Tw", "\\w+_Slit\\w+", False),
-                        ("dTw", f"{filter}\\w+_dTw", "\\w+_Slit\\w+", False),
-                        ("TwH", f"{filter}\\w+_Tw", "\\w+_Slit\\w+", True),
-                        ("dTwH", f"{filter}\\w+_dTw", "\\w+_Slit\\w+", True),
+                        ("Tw", f"Tw_{filter}\\w+", "\\w+_Slit\\w+", False),
+                        ("dTw", f"dTw_{filter}\\w+", "\\w+_Slit\\w+", False),
+                        ("TwH", f"Tw_{filter}\\w+", "\\w+_Slit\\w+", True),
+                        ("dTwH", f"dTw_{filter}\\w+", "\\w+_Slit\\w+", True),
                     ],
                     "value": (getDT),
                     "unit": "K",
@@ -356,6 +357,7 @@ def main():
                 targets[f"{filter}I"] = {
                     "objectif": values["value"],
                     "type": "bitter",
+                    "relax": values["relax"],
                     "csv": "heat.measures/values.csv",
                     "rematch": f"Statistics_Intensity_{filter}\\w+_integrate",
                     "params": [("N", f"N_{filter}\\w+")],
@@ -386,12 +388,14 @@ def main():
                 'MinHoop', 'MeanHoop', 'MaxHoop']
     
     """
+    e = None
 
-    (table, dict_df) = oneconfig(
+    (table, dict_df, e) = oneconfig(
+        e,
         comm,
         feelpp_directory,
-        jsonmodel,
-        meshmodel,
+        f"{pwd}/{jsonmodel}",
+        f"{pwd}/{meshmodel}",
         args,
         targets,
         postvalues,
