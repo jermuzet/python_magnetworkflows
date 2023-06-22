@@ -25,6 +25,7 @@ class waterflow:
     Fmax_l_per_second: float = 140  # l/s
     Pmax: float = 22  # bar
     Pmin: float = 4  # bar
+    BP: float = 4  # bar
     Imax: float = 28000  # A
 
     # Flow params
@@ -39,9 +40,12 @@ class waterflow:
         Fmax_l_per_second = flow_params["Fmax"]["value"]  # l/s
         Pmax = flow_params["Pmax"]["value"]  # bar
         Pmin = flow_params["Pmin"]["value"]  # bar
+        BP = 4
+        if "BP" in flow_params:
+            BP = flow_params["BP"]["value"]  # bar
         Imax = flow_params["Imax"]["value"]  # Amperes
 
-        return cls(Vpump0, Vpmax, F0_l_per_second, Fmax_l_per_second, Pmax, Pmin, Imax)
+        return cls(Vpump0, Vpmax, F0_l_per_second, Fmax_l_per_second, Pmax, Pmin, BP, Imax)
 
     def vpump(self, objectif: float) -> float:
         Vpump = self.Vpmax + self.Vpump0
@@ -68,18 +72,24 @@ class waterflow:
 
     def pressure(self, objectif: float) -> float:
         """
-        compute pressure in bar ???
+        compute pressure in bar
         """
-        return (
-            self.Pmin
-            + (self.Pmax - self.Pmin) * (self.vpump(objectif) / self.Vpmax) ** 2
-        )
+        
+        # print(f'pressure: P(I={objectif})={self.pressure(objectif)}, P0={self.Pmin}, Pmax={self.Pmax}')
+        
+        if objectif <= self.Imax:
+            return (
+                self.Pmin
+                + self.Pmax * (self.vpump(objectif) / (self.Vpmax + self.Vpump0)) ** 2
+            )
+        return self.Pmin + self.Pmax
 
     def dpressure(self, objectif: float) -> float:
         """
-        compute pressure in bar ???
+        compute dpressure in bar ???
         """
-        return self.pressure(objectif) - self.Pmin
+        #print(f'dpressure: P(I={objectif})={self.pressure(objectif)}, BP={self.BP}')
+        return self.pressure(objectif) - self.BP
 
     def umean(self, objectif: float, section: float) -> float:
         """
