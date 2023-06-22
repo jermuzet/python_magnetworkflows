@@ -27,7 +27,7 @@ def create_field(
     # print("create_field")
 
     # TODO: pass space and order in method params
-    Xh = fpp.functionSpace(space="Pch", mesh=feel_pb.mesh(), order=1)
+    Xh = fpp.functionSpace(space="Pdh", mesh=feel_pb.mesh(), order=0)
     usave = Xh.element()
 
     for target, values in targets.items():
@@ -55,7 +55,7 @@ def create_field_init(jsonmodel: str, meshmodel: str):
     # print("create_field")
 
     m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
-    Xh = fpp.functionSpace(space="Pch", mesh=m2d, order=1)
+    Xh = fpp.functionSpace(space="Pdh", mesh=m2d, order=0)
     usave = Xh.element()
 
     basedir = os.path.dirname(jsonmodel)
@@ -134,9 +134,6 @@ def solve(
     targets: dict of target
     params: dict(target, params:list of parameters name)
     """
-
-    if args.debug:
-        print(f"solve: jsonmodel={jsonmodel}, args={args}")
 
     # suffix of tmp files
     post = ""
