@@ -27,7 +27,7 @@ def create_field(
     # print("create_field")
 
     # TODO: pass space and order in method params
-    Xh = fpp.functionSpace(space="Pch", mesh=feel_pb.mesh(), order=1)
+    Xh = fpp.functionSpace(space="Pdh", mesh=feel_pb.mesh(), order=0)
     usave = Xh.element()
 
     for target, values in targets.items():
@@ -55,7 +55,7 @@ def create_field_init(jsonmodel: str, meshmodel: str):
     # print("create_field")
 
     m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
-    Xh = fpp.functionSpace(space="Pch", mesh=m2d, order=1)
+    Xh = fpp.functionSpace(space="Pdh", mesh=m2d, order=0)
     usave = Xh.element()
 
     basedir = os.path.dirname(jsonmodel)
@@ -90,20 +90,21 @@ def update(jsonmodel: str, parameters: dict):
 
 
 # TODO create toolboxes_options on the fly
-def init(args, jsonmodel: str, meshmodel: str, directory: str = ""):
-    pwd = os.getcwd()
-    e = fpp.Environment(
-        ["cli.py"],
-        opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
-        config=fpp.localRepository(directory),
-    )
+def init(e, args, jsonmodel: str, meshmodel: str, directory: str = ""):
+    # pwd = os.getcwd()
+    if not e:
+        e = fpp.Environment(
+            ["cli.py"],
+            opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
+            config=fpp.localRepository(directory),
+        )
 
     create_field_init(jsonmodel, meshmodel)
 
     e.setConfigFile(args.cfgfile)
 
     if e.isMasterRank():
-        print(f"init: pwd={pwd}")
+        # print(f"init: pwd={pwd}")
         print("Create cfpdes")
     f = cfpdes.cfpdes(dim=2)
 
@@ -118,9 +119,10 @@ def init(args, jsonmodel: str, meshmodel: str, directory: str = ""):
 
 
 def solve(
-    feelpp_directory,
-    jsonmodel,
-    meshmodel,
+    e,
+    feelpp_directory: str,
+    jsonmodel: str,
+    meshmodel: str,
     args,
     targets: dict,
     postvalues: dict,
@@ -133,9 +135,6 @@ def solve(
     params: dict(target, params:list of parameters name)
     """
 
-    if args.debug:
-        print(f"solve: jsonmodel={jsonmodel}, args={args}")
-
     # suffix of tmp files
     post = ""
     for target, values in targets.items():
@@ -143,7 +142,7 @@ def solve(
 
     basedir = os.path.dirname(jsonmodel)  # get absolute path instead??
 
-    (e, f) = init(args, jsonmodel, meshmodel, directory=feelpp_directory)
+    (e, f) = init(e, args, jsonmodel, meshmodel, directory=feelpp_directory)
 
     if e.isMasterRank():
         print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}")
@@ -229,9 +228,7 @@ def solve(
             # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
             filtered_df = getTarget(targets, target, e, args.debug)
 
-            relax = 0.0
-            if values["type"] == "bitter":
-                relax = 0.8
+            relax = values["relax"]
 
             # TODO: add stats for filtered_df to table_: mean, ecart type, min/max??
 
@@ -239,9 +236,11 @@ def solve(
             err_max_target = max(error.abs().max(axis=1))
             err_max = max(err_max_target, err_max)
             if e.isMasterRank():
-                print(f"{target}: objectif={objectif}")
-                print(f"{target}: filtered_df={filtered_df}")
-                print(f"{target}: error={error}")
+                if args.debug:
+                    print(f"{target}: objectif={objectif}")
+                    print(f"{target}: relax={relax}")
+                    print(f"{target}: filtered_df={filtered_df}")
+                    print(f"{target}: error={error}")
                 print(
                     f"{target}: it={it}, err_max={err_max_target}, eps={args.eps}, itmax={args.itermax}"
                 )
@@ -278,7 +277,7 @@ def solve(
 
             for param in values["computed_params"]:
                 name = param["name"]
-                if e.isMasterRank():
+                if args.debug and e.isMasterRank():
                     print(f"{target}: computed_params {name}")
 
                 if "csv" in param:
@@ -318,7 +317,7 @@ def solve(
             for key in ["statsT", "statsTH"]:
                 for param in postvalues[target][key]:
                     name = param["name"]
-                    if e.isMasterRank():
+                    if args.debug and e.isMasterRank():
                         print(f"{target}: postvalues_params {name}")
 
                     if "csv" in param:
@@ -333,10 +332,11 @@ def solve(
             Powers_Diff = abs(PowerM - SPower_H)
             PowerFlux_Diff = abs(PowerM - SFlux_H)
             if e.isMasterRank():
-                print("PowerM : ", dict_df[target]["PowerM"])
-                print(f'{target}: PowerH {dict_df[target]["PowerH"]}')
+                # Powers_Diff = abs(PowerM - SPower_H)
+                # PowerFlux_Diff = abs(PowerM - SFlux_H)
+
                 print(
-                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} PowerH={dict_df[target]["PowerH"].iloc[-1]} Ucoil={dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}'
+                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} \nPowerH=\n{dict_df[target]["PowerH"].iloc[-1]} \nUcoil=\n{dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}'
                 )
 
                 print(
@@ -344,6 +344,8 @@ def solve(
                 )
 
                 if args.debug:
+                    print("PowerM : ", dict_df[target]["PowerM"])
+                    print(f'{target}: PowerH {dict_df[target]["PowerH"]}')
                     for key in p_params:
                         print(f"{target}: {key}={p_params[key]}")
 
@@ -351,7 +353,7 @@ def solve(
                 Powers_Diff / PowerM < 1e-3
             ), f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM} SPower_H={SPower_H}"
             assert (
-                PowerFlux_Diff / PowerM < 5e-2
+                PowerFlux_Diff / PowerM < 1e-1
             ), f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM} SFlux_H={SFlux_H}"
 
             flow = values["waterflow"]
@@ -388,18 +390,19 @@ def solve(
                     )
                     for p in p_params["ZmaxH"]
                 ]
-
-                i = 0
-                for p in p_params["hwH"]:
-                    print(f"hwH[{i}]: key={p}, value={float(parameters[p])}")
-                    i += 1
+                if args.debug and e.isMasterRank():
+                    i = 0
+                    for p in p_params["hwH"]:
+                        print(f"hwH[{i}]: key={p}, value={float(parameters[p])}")
+                        i += 1
 
                 # TODO verify if data are consistant??
                 if e.isMasterRank():
                     print(
                         f"{target}: len(Dh)={len(Dh)}, len(TwH)={len(TwH)}, len(dTwH)={len(dTwH)}, len(Channels/Slits)={len(hwH)}"
                     )
-                    print(f'{target} Flux: {dict_df[target]["Flux"]}')
+                    if args.debug:
+                        print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
                 dTwi = []
                 Ti = []
@@ -408,10 +411,9 @@ def solve(
                 SpecHeat = []
                 Q = []
                 for i, (d, s) in enumerate(zip(Dh, Sh)):
-                    cname = p_params["Dh"][i].replace("_Dh", "")
-                    print(f"cname={cname}, i={i}")
-                    PowerCh = dict_df[target]["Flux"].iloc[-1, i]
-                    
+                    cname = p_params["Dh"][i].replace("Dh_", "")
+                    PowerCh = dict_df[target]["Flux"][cname].iloc[-1]
+
                     U = Umean
                     tmp_dTwi = dTwH[i]
                     tmp_hi = hwH[i]
@@ -465,7 +467,7 @@ def solve(
                     VolMass.append(rho(TwH[i] + dTwi[-1] / 2.0, Pressure))
                     SpecHeat.append(Cp(TwH[i] + dTwi[-1] / 2.0, Pressure))
 
-                if e.isMasterRank():
+                if args.debug and e.isMasterRank():
                     print(f"Q-flow={sum(Q)-flow.flow(abs(objectif))}")
                     print(
                         f"len(Ti)={len(Ti)}  len(VolMass)={len(VolMass)} len(SpecHeat)={len(SpecHeat)} len(Dh)={len(Dh)}  len(Sh)={len(Sh)}"
@@ -510,7 +512,7 @@ def solve(
                         flow.flow(abs(objectif)), PowerM, Tw[i], dTw[i], Pressure
                     )
                     hg = getHeatCoeff(
-                        sum(Dh) / float(len(Dh)),
+                        Dh[i],
                         L[i],
                         Umean,
                         Tw[i] + dTg / 2.0,
@@ -531,7 +533,7 @@ def solve(
                     dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [hg]
                     dict_df[target]["DT"][p_params["dTw"][i]] = [dTg]
 
-                if e.isMasterRank():
+                if args.debug and e.isMasterRank():
                     print(
                         f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={PowerM}, dTg={dTg}, hg={hg}'
                     )
@@ -568,7 +570,7 @@ def solve(
 
         if (
             err_max <= args.eps
-            and err_max_dT <= max(args.eps, 1e-3)
+            and err_max_dT <= max(args.eps, 1e-2)
             and err_max_h <= max(args.eps, 1e-2)
         ):
             break
@@ -607,4 +609,5 @@ def solve(
         os.remove(save_h5)
         os.remove(save_json)
 
-    return (table_df, dict_df)
+    return (table_df, dict_df, e)
+

@@ -19,10 +19,11 @@ from .solver import solve
 
 
 def oneconfig(
+    e,
     comm,
-    feelpp_directory,
-    jsonmodel,
-    meshmodel,
+    feelpp_directory: str,
+    jsonmodel: str,
+    meshmodel: str,
     args,
     targets: dict,
     postvalues: dict,
@@ -40,10 +41,10 @@ def oneconfig(
     table_values = []
     table_headers = []
 
-    pwd = os.getcwd()
+    # pwd = os.getcwd()
     basedir = os.path.dirname(args.cfgfile)
     if rank == 0:
-        print(f"oneconfig: workingdir={pwd}, jsonmodel={jsonmodel}, basedir={basedir}")
+        print(f"oneconfig: jsonmodel={jsonmodel}, basedir={basedir}")
 
     dict_df = {}
     for target, values in targets.items():
@@ -82,10 +83,11 @@ def oneconfig(
             tmp = getparam(p[0], parameters, p[1], args.debug)
             params[key] += tmp
 
-    (table, dict_df) = solve(
+    (table, dict_df, e) = solve(
+        e,
         feelpp_directory,
-        f"{pwd}/{jsonmodel}",
-        f"{pwd}/{meshmodel}",
+        jsonmodel,
+        meshmodel,
         args,
         targets,
         postvalues,
@@ -93,7 +95,6 @@ def oneconfig(
         parameters,
         dict_df,
     )
-
     for target, values in dict_df.items():
         if rank == 0:
             print(f"\n\nresult for {target}:")
@@ -238,5 +239,5 @@ def oneconfig(
         results[name] = (table_headers, table_values)
         """
 
-    return (table, dict_df)
+    return (table, dict_df, e)
 

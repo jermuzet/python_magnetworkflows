@@ -41,6 +41,13 @@ def main():
     parser.add_argument("--mdata", help="specify current data", type=json.loads)
 
     parser.add_argument(
+        "--step",
+        help="specify current step for commissioning",
+        type=float,
+        default=15000.0,
+    )
+
+    parser.add_argument(
         "--cooling",
         help="choose cooling type",
         type=str,
@@ -54,13 +61,13 @@ def main():
         choices=["Montgomery", "Dittus", "Colburn", "Silverberg"],
         default="Montgomery",
     )
-    parser.add_argument(
-        "--friction",
-        help="choose friction method",
-        type=str,
-        choices=["Constant", "Blasius", "Filonenko", "Colebrook", "Swanee"],
-        default="Constant",
-    )
+    # parser.add_argument(
+    #     "--friction",
+    #     help="choose friction method",
+    #     type=str,
+    #     choices=["Blasius", "Filonenko", "Colebrook", "Swanee"],
+    #     default="Colebrook",
+    # )
     parser.add_argument(
         "--eps",
         help="specify requested tolerance (default: 1.e-3)",
@@ -374,8 +381,8 @@ def main():
                 "statsTH": [MinTH, MeanTH, MaxTH],
             }
 
-    if rank == 0:
-        print(f"targets: {targets.keys()}")
+    # if rank == 0:
+    #     print(f"targets: {targets.keys()}")
 
     """
     postvalues = {
@@ -388,28 +395,109 @@ def main():
                 'MinHoop', 'MeanHoop', 'MaxHoop']
     
     """
+    Commissioning = True
     e = None
 
-    (table, dict_df, e) = oneconfig(
-        e,
-        comm,
-        feelpp_directory,
-        f"{pwd}/{jsonmodel}",
-        f"{pwd}/{meshmodel}",
-        args,
-        targets,
-        postvalues,
-        parameters,
-    )
+    global_df = {}
+    I = []
+    for mname, values in args.mdata.items():
+        filter = values["filter"]
+        global_df[filter[:-1]] = {
+            "PowerM": pd.DataFrame(),
+            "PowerH": pd.DataFrame(),
+            "Flux": pd.DataFrame(),
+            "HeatCoeff": pd.DataFrame(),
+            "DT": pd.DataFrame(),
+            "statsT": pd.DataFrame(),
+            "statsTH": pd.DataFrame(),
+        }
+        I.append(values["value"])
+
+    nstep = 1
+    while Commissioning:
+
+        if rank == 0:
+            print("\n\nONECONFIG START")
+
+        (table, dict_df, e) = oneconfig(
+            e,
+            comm,
+            feelpp_directory,
+            f"{pwd}/{jsonmodel}",
+            f"{pwd}/{meshmodel}",
+            args,
+            targets,
+            postvalues,
+            parameters,
+        )
+        if rank == 0:
+            outdir = f"U_{I}.measures"
+            if not os.path.exists(outdir):
+                os.mkdir(outdir)
+            table.to_csv(f"{outdir}/values.csv", index=False)
+
+            table_final = pd.DataFrame(["values"], columns=["measures"])
+
+            for target, values in dict_df.items():
+                mname = target[:-2]
+                table_final[f"{mname}_flow[l/s]"] = dict_df[target]["flow"] * 1e3
+                table_final[f"{mname}_Tout[K]"] = dict_df[target]["Tout"]
+                print("\n")
+                for key, df in values.items():
+                    if isinstance(df, pd.DataFrame):
+                        global_df[mname][key] = pd.concat([global_df[mname][key], df])
+                        if key == "PowerM":
+                            table_final[f"{mname}_PowerM[MW]"] = df.T.iloc[0, 0] * 1e-6
+                        elif key == "PowerH":
+                            dfUcoil = df / dict_df[target]["target"]
+                            for (columnName, columnData) in dfUcoil.iteritems():
+                                if "H" in columnName:
+                                    nH = int(columnName.split("H", 1)[1])
+
+                                    Uname = f"{mname}_Ucoil_H{nH-1}H{nH}[V]"
+                                    if nH % 2:
+                                        Uname = f"{mname}_Ucoil_H{nH}H{nH+1}[V]"
+
+                                    if Uname in table_final.columns:
+                                        table_final[Uname] += columnData.iloc[-1]
+                                    else:
+                                        table_final[Uname] = columnData.iloc[-1]
+
+                                else:
+                                    table_final[
+                                        f"{mname}_Ucoil_{columnName}[V]"
+                                    ] = columnData.iloc[-1]
+
+                    if key in ["statsT", "statsTH"]:
+                        list_dfT = [dfT for keyT, dfT in df.items()]
+                        dfT = pd.concat(list_dfT, sort=True)
+                        global_df[mname][key] = pd.concat([global_df[mname][key], dfT])
+
+            if "mag" in args.cfgfile:
+                df = pd.read_csv("magnetic.measures/values.csv")
+                table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
+            print("ONECONFIG DONE")
+
+        table_final.set_index("measures", inplace=True)
+        table_final.T.to_csv(f"measures{I}.csv", index=True)
+
+        print(table_final.T)
+
+        i = 0
+        for mname, values in args.mdata.items():
+            filter = values["filter"]
+            targets[f"{filter}I"]["objectif"] -= nstep * args.step
+            I[i] = targets[f"{filter}I"]["objectif"]
+            if I[i] <= 0:
+                Commissioning = False
+
+            i += 1
+
+        nstep += 1
 
     if rank == 0:
-        table_final = pd.DataFrame(["values"], columns=["measures"])
-
-        for target, values in dict_df.items():
+        for target, values in global_df.items():
             mname = target[:-2]
-            table_final[f"{mname}_flow[l/s]"] = dict_df[target]["flow"] * 1e3
-            table_final[f"{mname}_Tout[K]"] = dict_df[target]["Tout"]
-            print("\n")
             for key, df in values.items():
                 if key in ["DT", "HeatCoeff"]:
                     outdir = f"{mname}_{key}.measures"
@@ -422,50 +510,6 @@ def main():
                     if not os.path.exists(outdir):
                         os.mkdir(outdir)
                     df_T.to_csv(f"{outdir}/values.csv", index=True)
-
-                    if key == "PowerM":
-                        table_final[f"{mname}_PowerM[MW]"] = df_T.iloc[0, 0] * 1e-6
-                    elif key == "PowerH":
-                        dfUcoil = df / dict_df[target]["target"]
-                        for (columnName, columnData) in dfUcoil.iteritems():
-                            if "H" in columnName:
-                                nH = int(columnName.split("H", 1)[1])
-
-                                Uname = f"{mname}_Ucoil_H{nH-1}H{nH}[V]"
-                                if nH % 2:
-                                    Uname = f"{mname}_Ucoil_H{nH}H{nH+1}[V]"
-
-                                if Uname in table_final.columns:
-                                    table_final[Uname] += columnData.iloc[-1]
-                                else:
-                                    table_final[Uname] = columnData.iloc[-1]
-
-                            else:
-                                table_final[
-                                    f"{mname}_Ucoil_{columnName}[V]"
-                                ] = columnData.iloc[-1]
-
-                if key in ["statsT", "statsTH"]:
-                    list_dfT = [dfT for keyT, dfT in df.items()]
-                    dfT = pd.concat(list_dfT, sort=True).T
-                    outdir = f"{mname}_{key}.measures"
-                    if not os.path.exists(outdir):
-                        os.mkdir(outdir)
-                    dfT.to_csv(f"{outdir}/values.csv", index=True)
-
-        outdir = f"U.measures"
-        if not os.path.exists(outdir):
-            os.mkdir(outdir)
-        table.to_csv(f"{outdir}/values.csv", index=False)
-
-        if "mag" in args.cfgfile:
-            df = pd.read_csv("magnetic.measures/values.csv")
-            table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
-
-        table_final.set_index("measures", inplace=True)
-        table_final.T.to_csv(f"measures.csv", index=True)
-
-        print(table_final.T)
 
     return 0
 
