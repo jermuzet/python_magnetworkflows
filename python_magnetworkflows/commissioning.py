@@ -61,13 +61,13 @@ def main():
         choices=["Montgomery", "Dittus", "Colburn", "Silverberg"],
         default="Montgomery",
     )
-    # parser.add_argument(
-    #     "--friction",
-    #     help="choose friction method",
-    #     type=str,
-    #     choices=["Blasius", "Filonenko", "Colebrook", "Swanee"],
-    #     default="Colebrook",
-    # )
+    parser.add_argument(
+        "--friction",
+        help="choose friction method",
+        type=str,
+        choices=["Constant", "Blasius", "Filonenko", "Colebrook", "Swanee"],
+        default="Constant",
+    )
     parser.add_argument(
         "--eps",
         help="specify requested tolerance (default: 1.e-3)",
