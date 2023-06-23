@@ -157,8 +157,8 @@ def main():
                 HeatCoeff = {
                     "name": "HeatCoeff",
                     "params": [
-                        ("Dh", f"Dh_{filter}Channel\\d+"),
-                        ("Sh", f"Sh_{filter}Channel\\d+"),
+                        ("Dh", f"Dh_{filter}\\w+"),
+                        ("Sh", f"Sh_{filter}\\w+"),
                         ("hw", f"hw_{filter}Channel"),
                         ("hwH", f"hw_{filter}Channel\\d+"),
                         ("Zmax", f"Zmax_{filter}Channel"),
@@ -452,6 +452,10 @@ def main():
                     if not os.path.exists(outdir):
                         os.mkdir(outdir)
                     dfT.to_csv(f"{outdir}/values.csv", index=True)
+
+            for (columnName, columnData) in table_final.iteritems():
+                if columnName.startswith(f"{mname}_Ucoil") :
+                    table_final[columnName.replace("Ucoil","R(I)")] = columnData/ dict_df[target]["target"]
 
         outdir = f"U.measures"
         if not os.path.exists(outdir):
