@@ -41,13 +41,6 @@ def main():
     parser.add_argument("--mdata", help="specify current data", type=json.loads)
 
     parser.add_argument(
-        "--step",
-        help="specify current step for commissioning",
-        type=float,
-        default=15000.0,
-    )
-
-    parser.add_argument(
         "--cooling",
         help="choose cooling type",
         type=str,
@@ -164,8 +157,8 @@ def main():
                 HeatCoeff = {
                     "name": "HeatCoeff",
                     "params": [
-                        ("Dh", f"Dh_{filter}Channel\\d+"),
-                        ("Sh", f"Sh_{filter}Channel\\d+"),
+                        ("Dh", f"Dh_{filter}\\w+"),
+                        ("Sh", f"Sh_{filter}\\w+"),
                         ("hw", f"hw_{filter}Channel"),
                         ("hwH", f"hw_{filter}Channel\\d+"),
                         ("Zmax", f"Zmax_{filter}Channel"),
@@ -473,6 +466,10 @@ def main():
                         dfT = pd.concat(list_dfT, sort=True)
                         global_df[mname][key] = pd.concat([global_df[mname][key], dfT])
 
+                for (columnName, columnData) in table_final.iteritems():
+                    if columnName.startswith(f"{mname}_Ucoil") :
+                        table_final[columnName.replace("Ucoil","R(I)").replace("[V]","[ohm]")] = columnData/ dict_df[target]["target"]
+
             if "mag" in args.cfgfile:
                 df = pd.read_csv("magnetic.measures/values.csv")
                 table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
@@ -486,7 +483,7 @@ def main():
         i = 0
         for mname, values in args.mdata.items():
             filter = values["filter"]
-            targets[f"{filter}I"]["objectif"] -= nstep * args.step
+            targets[f"{filter}I"]["objectif"] -= nstep * values["step"]
             I[i] = targets[f"{filter}I"]["objectif"]
             if I[i] <= 0:
                 Commissioning = False

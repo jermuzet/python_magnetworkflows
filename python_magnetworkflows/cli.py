@@ -455,7 +455,7 @@ def main():
 
             for (columnName, columnData) in table_final.iteritems():
                 if columnName.startswith(f"{mname}_Ucoil") :
-                    table_final[columnName.replace("Ucoil","R(I)")] = columnData/ dict_df[target]["target"]
+                    table_final[columnName.replace("Ucoil","R(I)").replace("[V]","[ohm]")] = columnData/ dict_df[target]["target"]
 
         outdir = f"U.measures"
         if not os.path.exists(outdir):
