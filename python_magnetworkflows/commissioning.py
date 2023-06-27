@@ -465,7 +465,7 @@ def main():
                         list_dfT = [dfT for keyT, dfT in df.items()]
                         dfT = pd.concat(list_dfT, sort=True)
                         global_df[mname][key] = pd.concat([global_df[mname][key], dfT])
-                        
+
                         if key == "statsTH":
                             T_method = {
                                 "Min": min,
@@ -497,6 +497,10 @@ def main():
             if "mag" in args.cfgfile:
                 df = pd.read_csv("magnetic.measures/values.csv")
                 table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
+
+            if dict_df["MSite_Tout"] != 0 :
+                table_final["Tout"] = dict_df["MSite_Tout"]
+                
             print("ONECONFIG DONE")
 
         table_final.set_index("measures", inplace=True)

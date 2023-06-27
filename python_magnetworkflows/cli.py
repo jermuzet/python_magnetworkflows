@@ -491,6 +491,9 @@ def main():
             df = pd.read_csv("magnetic.measures/values.csv")
             table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
 
+        if dict_df["MSite_Tout"] != 0 :
+            table_final["Tout"] = dict_df["MSite_Tout"]
+
         table_final.set_index("measures", inplace=True)
         table_final.T.to_csv(f"measures.csv", index=True)
 
