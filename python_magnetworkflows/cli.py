@@ -447,11 +447,36 @@ def main():
 
                 if key in ["statsT", "statsTH"]:
                     list_dfT = [dfT for keyT, dfT in df.items()]
-                    dfT = pd.concat(list_dfT, sort=True).T
+                    dfT = pd.concat(list_dfT, sort=True)
+                    dfT_T=dfT.T
                     outdir = f"{mname}_{key}.measures"
                     if not os.path.exists(outdir):
                         os.mkdir(outdir)
-                    dfT.to_csv(f"{outdir}/values.csv", index=True)
+                    dfT_T.to_csv(f"{outdir}/values.csv", index=True)
+
+                    if key == "statsTH":
+                        T_method = {
+                            "Min": min,
+                            "Max": max,
+                        }
+                        for (columnName, columnData) in dfT.iteritems():
+                            for T in ["Min","Max"] :
+                                if "H" in columnName:
+                                    nH = int(columnName.split("H", 1)[1])
+
+                                    Tname = f"{mname}_{T}TH_H{nH-1}H{nH}[K]"
+                                    if nH % 2:
+                                        Tname = f"{mname}_{T}TH_H{nH}H{nH+1}[K]"
+
+                                    if Tname in table_final.columns:
+                                        table_final[Tname] = T_method[T](table_final[Tname],dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName])
+                                    else:
+                                        table_final[Tname] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
+
+                                else:
+                                    table_final[
+                                        f"{mname}_T{T}_{columnName}[K]"
+                                    ] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
 
             for (columnName, columnData) in table_final.iteritems():
                 if columnName.startswith(f"{mname}_Ucoil") :
