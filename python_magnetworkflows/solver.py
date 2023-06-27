@@ -3,6 +3,7 @@ from typing import List
 import re
 import os
 import shutil
+import copy
 
 import json
 from tabulate import tabulate
@@ -39,7 +40,7 @@ def create_field(
         for param in params:
             marker = param.replace("U_", "")  # 'U_': (values['control_params'][0])[0]
             # print(f'marker: {marker}, goal={values["goals"][marker].iloc[-1]} xx')
-            value = float(parameters[param])
+            value = parameters[param]
             usave.on(
                 range=fpp.markedelements(feel_pb.mesh(), marker),
                 expr=fpp.expr(str(value)),
@@ -185,8 +186,7 @@ def solve(
     while it < args.itermax:
         new_json = jsonmodel.replace(".json", f"-it{it}-{post[:-1]}.json")
         if e.isMasterRank():
-            print(f"make a copy of files for it={it}")
-            print(f"jsonmodel={jsonmodel}, new_json={new_json}")
+            print(f"make a copy of files for it={it}, new_json={new_json}")
         # shutil.copy2(jsonmodel, new_json)
         dict_json = {}
         with open(jsonmodel, "r") as jsonfile:
@@ -195,6 +195,12 @@ def solve(
                 "filename"
             ] = f"$cfgdir/U-it{it}.h5"
             # print(f'dict_json={dict_json}')
+            csvfiles = [ value["filename"] for p,value in dict_json["Parameters"].items() if isinstance(value,dict) ]
+            # print(f'cvsfiles: {csvfiles}')
+            for file in csvfiles:
+                _file = file.replace("$cfgdir", basedir)
+                filename = _file.replace(".csv","")
+                shutil.copy2(f"{_file}", f"{_file}-it{it}.csv")
         with open(new_json, "w+") as jsonfile:
             jsonfile.write(json.dumps(dict_json, indent=4))
 
@@ -242,7 +248,7 @@ def solve(
                     print(f"{target}: filtered_df={filtered_df}")
                     print(f"{target}: error={error}")
                 print(
-                    f"{target}: it={it}, err_max={err_max_target}, eps={args.eps}, itmax={args.itermax}"
+                    f"{target}: it={it}, err_max={err_max_target:.3e}, eps={args.eps:.3e}, itmax={args.itermax}"
                 )
 
             for param in params[target]:
@@ -250,26 +256,19 @@ def solve(
                     "U_", ""
                 )  # get name from values['control_params'] / change control_params to a list of dict?
                 val = filtered_df[marker].iloc[-1]
-                ovalue = float(parameters[param])
+                ovalue = parameters[param]
                 table_.append(ovalue)
                 nvalue = ovalue * objectif / val
                 if e.isMasterRank():
                     print(
-                        f"{it}: {marker}, goal={objectif}, val={val}, err={error[marker].iloc[-1]}, ovalue={ovalue}, nvalue={nvalue}"
+                        f"{it}: {marker}, goal={objectif:.3f}, val={val:.3f}, err={error[marker].iloc[-1]:.3e}, ovalue={ovalue:.3f}, nvalue={nvalue:.3f}"
                     )
                 f.addParameterInModelProperties(param, nvalue)
                 parameters[param] = nvalue
 
-                # usave.on(
-                #     range=fpp.markedelements(f.mesh(), marker),
-                #     expr=fpp.expr(str(nvalue)),
-                # )
-
             table_.append(err_max_target)
 
             # update bcs
-            if e.isMasterRank():
-                print(f"{target}: it={it}, update BCs")
             p_params = {}
             # TODO upload p_df into a dict like {name: p_df} with name = target (aka key of targets)
             # this way we can get p_df per target as an output for solve
@@ -332,15 +331,8 @@ def solve(
             Powers_Diff = abs(PowerM - SPower_H)
             PowerFlux_Diff = abs(PowerM - SFlux_H)
             if e.isMasterRank():
-                # Powers_Diff = abs(PowerM - SPower_H)
-                # PowerFlux_Diff = abs(PowerM - SFlux_H)
-
                 print(
-                    f'{target}: it={it} Power={PowerM} SPower_H={SPower_H} SFlux_H={SFlux_H} \nPowerH=\n{dict_df[target]["PowerH"].iloc[-1]} \nUcoil=\n{dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}'
-                )
-
-                print(
-                    f"{target}: it={it} Power-SPower_H={Powers_Diff}     Power-SFlux_H={PowerFlux_Diff}"
+                    f'{target}: it={it} Power={PowerM:.3f} SPower_H={SPower_H:.3f} SFlux_H={SFlux_H:.3f} \nPowerH=\n{dict_df[target]["PowerH"].iloc[-1]} \nUcoil=\n{dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}'
                 )
 
                 if args.debug:
@@ -360,19 +352,19 @@ def solve(
             Pressure = flow.pressure(abs(objectif))
             dPressure = flow.dpressure(abs(objectif))
 
-            Dh = [float(parameters[p]) for p in p_params["Dh"]]
-            Sh = [float(parameters[p]) for p in p_params["Sh"]]
+            Dh = [parameters[p] for p in p_params["Dh"]]
+            Sh = [parameters[p] for p in p_params["Sh"]]
             if args.debug and e.isMasterRank():
                 i = 0
                 for p in p_params["Dh"]:
-                    print(f"Dh[{i}]: key={p}, value={float(parameters[p])}")
+                    print(f"Dh[{i}]: key={p}, value={parameters[p]}")
                     i += 1
                 print(f'Dh: {p_params["Dh"]}')
 
             Umean = flow.umean(abs(objectif), sum(Sh))  # math.fsum(Sh)
             if e.isMasterRank():
                 print(
-                    f"{target}: it={it}, objectif={abs(objectif)}, Umean={Umean}, Flow={flow.flow(abs(objectif))}"
+                    f"{target}: it={it}, objectif={abs(objectif):.3f}, Umean={Umean:.3f}, Flow={flow.flow(abs(objectif)):.3f}"
                 )
             dict_df[target]["flow"] = flow.flow(abs(objectif))
 
@@ -380,128 +372,273 @@ def solve(
             error_h = []
             # per Channel/Slit
             if "H" in args.cooling:
-                TwH = [float(parameters[p]) for p in p_params["TwH"]]
-                dTwH = [float(parameters[p]) for p in p_params["dTwH"]]
-                hwH = [float(parameters[p]) for p in p_params["hwH"]]
+                TwH = [parameters[p] for p in p_params["TwH"]]
+                dTwH = [parameters[p] for p in p_params["dTwH"]]
+                hwH = [parameters[p] for p in p_params["hwH"]]
                 Lh = [
-                    abs(
-                        float(parameters[p])
-                        - float(parameters[p.replace("max", "min")])
-                    )
+                    abs(parameters[p] - parameters[p.replace("max", "min")])
                     for p in p_params["ZmaxH"]
                 ]
                 if args.debug and e.isMasterRank():
                     i = 0
                     for p in p_params["hwH"]:
-                        print(f"hwH[{i}]: key={p}, value={float(parameters[p])}")
+                        print(f"hwH[{i}]: key={p}, value={parameters[p]}")
                         i += 1
 
                 # TODO verify if data are consistant??
+                # assert len(Dh) == len(TwH) == len(dTwH) == len(hwH)
                 if e.isMasterRank():
-                    print(
-                        f"{target}: len(Dh)={len(Dh)}, len(TwH)={len(TwH)}, len(dTwH)={len(dTwH)}, len(Channels/Slits)={len(hwH)}"
-                    )
                     if args.debug:
                         print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
-                dTwi = []
-                Ti = []
-                hi = []
-                VolMass = []
-                SpecHeat = []
-                Q = []
-                for i, (d, s) in enumerate(zip(Dh, Sh)):
-                    cname = p_params["Dh"][i].replace("Dh_", "")
-                    PowerCh = dict_df[target]["Flux"][cname].iloc[-1]
+                dTwH = [0] * len(Dh)
+                dTwi = [0] * len(Dh)
+                Ti = [0] * len(Dh)
+                hi = [0] * len(Dh)
+                VolMass = [0] * len(Dh)
+                SpecHeat = [0] * len(Dh)
+                Q = [0] * len(Dh)
+                Tw0 = None
 
-                    U = Umean
-                    tmp_dTwi = dTwH[i]
-                    tmp_hi = hwH[i]
-                    print(f"cname={cname}, i={i}, U={U}, tmp_dTwi={tmp_dTwi}, tmp_hi={tmp_hi}")
-                    while True:
-                        tmp_flow = U * s
-                        tmp_dTwi = getDT(tmp_flow, PowerCh, TwH[i], dTwH[i], Pressure)
-                        
-                        tmp_hi = getHeatCoeff(
-                            d,
-                            Lh[i],
-                            U,
-                            TwH[i] + tmp_dTwi / 2.0,
-                            hwH[i],
-                            Pressure,
-                            dPressure,
-                            model=args.heatcorrelation,
-                            friction=args.friction
-                        )
-                        
-                        if args.heatcorrelation != "Montgomery":
-                            tmp_U = Uw(TwH[i] + tmp_dTwi / 2.0, Pressure, dPressure, d, Lh[i], friction=args.friction, uguess=U)
-                            n_tmp_flow = tmp_U * s
-                            U = tmp_U
+                if "Z" in args.cooling:
+                    NCoolingCh = len(Dh)
+                    FluxZ = copy.deepcopy(dict_df[target]["Flux"])
 
-                            if abs(1 - n_tmp_flow / tmp_flow) <= 1.e-3:
+                    for i, (d, s) in enumerate(zip(Dh, Sh)):
+                        cname = p_params["Dh"][i].replace("Dh_", "")
+
+                        U = Umean
+
+                        # load T_z_old from csv
+                        # print(f"TwH[{i}]: {TwH[i]}")
+                        csvfile = TwH[i]["filename"].replace("$cfgdir", basedir)
+                        # replace $cfgdir by actual value from feelpp environment e
+                        # print(f"cwd={os.getcwd()}, csvfile={csvfile}")
+                        Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
+                        _old = Tw_data["Tw"].to_list()
+                        _new = None
+                        dTwH[i] = _old[-1] - _old[0]
+                        section = len(_old)
+
+                        # get PowerCh_Z
+                        key_dz = [
+                            fkey
+                            for fkey in FluxZ.columns.values.tolist()
+                            if fkey.endswith(cname)
+                        ]
+                        # print(f'key_dz={key_dz}')
+                        FluxCh_dz = [FluxZ[fkey].iloc[-1] for fkey in key_dz]
+                        PowerCh = sum(FluxCh_dz)
+                        dict_df[target]["Flux"].drop(columns=key_dz, inplace=True)
+
+                        while True:
+                            tmp_flow = U * s
+                            """
+                            if e.isMasterRank():
+                                print(
+                                    f"FluxZ[{cname}]: sum_dz={PowerCh}, key_dz={key_dz}"
+                                )
+                            """
+
+                            _new = copy.deepcopy(_old)
+                            #print(f"_old: {_old}")
+                            for k, flux in enumerate(FluxCh_dz):
+                                dT_old = _old[k + 1] - _old[k]
+                                dT_new = getDT(
+                                    tmp_flow, flux, _old[k], dT_old, Pressure
+                                )
+                                _new[k + 1] = _new[k] + dT_new
+
+                            #print(f"_new: {_new}, relax={relax}")
+                            for k in range(section):
+                                # print(f's={s}, {1-relax} * {_new[s]} + {relax} * {_old[s]}')
+                                _new[k] = (1 - relax) * _new[k] + relax * _old[k]
+                            #print(f"_new (after relax): {_new}")
+
+                            dTwi[i] = _new[-1] - _new[0]
+                            tmp_hi = getHeatCoeff(
+                                d,
+                                Lh[i],
+                                U,
+                                _new[0] + dTwi[-1] / 2.0,
+                                hwH[i],
+                                Pressure,
+                                dPressure,
+                                model=args.heatcorrelation,
+                                friction=args.friction,
+                            )
+
+                            if args.heatcorrelation != "Montgomery":
+                                tmp_U = Uw(
+                                    _new[0] + dTwi[-1] / 2.0,
+                                    Pressure,
+                                    dPressure,
+                                    d,
+                                    Lh[i],
+                                    friction=args.friction,
+                                    uguess=U,
+                                )
+                                n_tmp_flow = tmp_U * s
+                                U = tmp_U
+
+                                if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
+                                    break
+                            else:
                                 break
-                        else:
-                            break
 
-                    Q.append(tmp_flow)
-                    dTwi.append((1.-relax)*tmp_dTwi+relax*dTwH[i])
-                    Ti.append(TwH[i] + dTwi[-1])
-                    hi.append((1.-relax)*tmp_hi+relax*dTwH[i])
+                            _old = copy.deepcopy(_new)
 
-                    f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
-                    f.addParameterInModelProperties(p_params["hwH"][i], hi[-1])
-                    parameters[p_params["hwH"][i]] = hi[-1]
-                    parameters[p_params["dTwH"][i]] = dTwi[-1]
-                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[-1]]
-                    dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[-1]]
+                        Q[i] = tmp_flow
+                        hi[i] = (1.0 - relax) * tmp_hi + relax * hwH[i]
 
-                    error_dT.append(abs(1 - (dTwH[i] / dTwi[-1])))
-                    error_h.append(abs(1 - (hwH[i] / hi[-1])))
+                        # save back to csv: T_z.to_csv(f"Tw_{cname}.csv", index=False)
+                        Tw_data["Tw"] = _new
+                        # print(f'save _new={_new} to {csvfile}')
+                        Tw_data.to_csv(f"{csvfile}", index=False)
 
+                        # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
+                        f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
+                        parameters[p_params["hwH"][i]] = hi[i]
+                        # parameters[p_params["dTwH"][i]] = dTwi[-1]
+                        dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[i]]
+                        dict_df[target]["DT"][cname] = [dTwi[i]]
+                        # !! export FluxZ = dict_df[target]["Flux"] with sections regrouped !!
+                        dict_df[target]["Flux"][cname] = PowerCh
+
+                        error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
+                        error_h.append(abs(1 - (hwH[i] / hi[i])))
+
+                        Tw0 = Tw_data["Tw"].iloc[0]
+                        if e.isMasterRank():
+                            print(
+                                f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d}, Sh={s}, Power={PowerCh:.3f}, TwH={Tw0:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}"
+                            )
+
+                        Ti[i] = Tw0 + dTwi[i]
+                        VolMass[i] = rho(Tw0 + dTwi[i] / 2.0, Pressure)
+                        SpecHeat[i] = Cp(Tw0 + dTwi[i] / 2.0, Pressure)
+
+                    if args.debug and e.isMasterRank():
+                        print(f"Q-flow={sum(Q)-flow.flow(abs(objectif))}")
+
+                    # compute an estimate of dTg
+                    Tout = getTout(Ti, VolMass, SpecHeat, Q)
+                    VolMassout = rho(Tout, Pressure)
+                    SpecHeatout = Cp(Tout, Pressure)
+                    Qout = Umean * sum(Sh)
+
+                    List_Tout.append(Tout)
+                    List_VolMassout.append(VolMassout)
+                    List_SpecHeatout.append(SpecHeatout)
+                    List_Qout.append(Qout)
+
+                    dTg = Tout - Tw0
                     if e.isMasterRank():
                         print(
-                            f"{target} {i}: cname={cname}, u={U}, Dh={d}, Sh={s}, Power={PowerCh}, TwH={TwH[i]}, dTwH={dTwH[i]}, hwH={hwH[i]}, dTwi={dTwi[i]}, hi={hi[i]}"
+                            f"{target}: Tout={Tout:.3f}  Tw={Tw0:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f})"
                         )
+                    dict_df[target]["Tout"] = Tout
+                    # exit(1)
 
-                    VolMass.append(rho(TwH[i] + dTwi[-1] / 2.0, Pressure))
-                    SpecHeat.append(Cp(TwH[i] + dTwi[-1] / 2.0, Pressure))
+                else:
+                    for i, (d, s) in enumerate(zip(Dh, Sh)):
+                        cname = p_params["Dh"][i].replace("Dh_", "")
+                        PowerCh = dict_df[target]["Flux"][cname].iloc[-1]
 
-                if args.debug and e.isMasterRank():
-                    print(f"Q-flow={sum(Q)-flow.flow(abs(objectif))}")
-                    print(
-                        f"len(Ti)={len(Ti)}  len(VolMass)={len(VolMass)} len(SpecHeat)={len(SpecHeat)} len(Dh)={len(Dh)}  len(Sh)={len(Sh)}"
-                    )
+                        U = Umean
+                        tmp_dTwi = dTwH[i]
+                        tmp_hi = hwH[i]
+                        print(
+                            f"cname={cname}, i={i}, U={U:.3f}, tmp_dTwi={tmp_dTwi:.3f}, tmp_hi={tmp_hi:.3f}"
+                        )
+                        while True:
+                            tmp_flow = U * s
+                            tmp_dTwi = getDT(
+                                tmp_flow, PowerCh, TwH[i], dTwH[i], Pressure
+                            )
 
-                # TODO compute an estimate of dTg
-                # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
-                Tout = getTout(Ti, VolMass, SpecHeat, Q)
-                VolMassout = rho(Tout, Pressure)
-                SpecHeatout = Cp(Tout, Pressure)
-                Qout = Umean * sum(Sh)
+                            tmp_hi = getHeatCoeff(
+                                d,
+                                Lh[i],
+                                U,
+                                TwH[i] + tmp_dTwi / 2.0,
+                                hwH[i],
+                                Pressure,
+                                dPressure,
+                                model=args.heatcorrelation,
+                                friction=args.friction,
+                            )
 
-                List_Tout.append(Tout)
-                List_VolMassout.append(VolMassout)
-                List_SpecHeatout.append(SpecHeatout)
-                List_Qout.append(Qout)
+                            if args.heatcorrelation != "Montgomery":
+                                tmp_U = Uw(
+                                    TwH[i] + tmp_dTwi / 2.0,
+                                    Pressure,
+                                    dPressure,
+                                    d,
+                                    Lh[i],
+                                    friction=args.friction,
+                                    uguess=U,
+                                )
+                                n_tmp_flow = tmp_U * s
+                                U = tmp_U
 
-                dTg = Tout - TwH[0]
-                if e.isMasterRank():
-                    print(
-                        f"{target}: Tout={Tout}  Tw={TwH[0]}, U={Umean}, Power={PowerM}, dTg={dTg} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif)))})"
-                    )
-                dict_df[target]["Tout"] = Tout
+                                if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
+                                    break
+                            else:
+                                break
+
+                        Q[i] = tmp_flow
+                        dTwi[i] = (1.0 - relax) * tmp_dTwi + relax * dTwH[i]
+                        Ti[i] = TwH[i] + dTwi[i]
+                        hi[i] = (1.0 - relax) * tmp_hi + relax * hwH[i]
+
+                        f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[i])
+                        f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
+                        parameters[p_params["hwH"][i]] = hi[i]
+                        parameters[p_params["dTwH"][i]] = dTwi[i]
+                        dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[i]]
+                        dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[i]]
+
+                        error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
+                        error_h[i].append(abs(1 - (hwH[i] / hi[i])))
+
+                        if e.isMasterRank():
+                            print(
+                                f"{target} {i}: cname={cname}, u={U:.3f}, Dh={d}, Sh={s}, Power={PowerCh:.3f}, TwH={TwH[i]:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}"
+                            )
+
+                        VolMass[i] = rho(TwH[i] + dTwi[i] / 2.0, Pressure)
+                        SpecHeat[i] = Cp(TwH[i] + dTwi[i] / 2.0, Pressure)
+
+                    if args.debug and e.isMasterRank():
+                        print(f"Q-flow={sum(Q)-flow.flow(abs(objectif))}")
+
+                    # TODO compute an estimate of dTg
+                    # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
+                    Tout = getTout(Ti, VolMass, SpecHeat, Q)
+                    VolMassout = rho(Tout, Pressure)
+                    SpecHeatout = Cp(Tout, Pressure)
+                    Qout = Umean * sum(Sh)
+
+                    List_Tout.append(Tout)
+                    List_VolMassout.append(VolMassout)
+                    List_SpecHeatout.append(SpecHeatout)
+                    List_Qout.append(Qout)
+
+                    dTg = Tout - TwH[0]
+                    if e.isMasterRank():
+                        print(
+                            f"{target}: Tout={Tout:.3f}  Tw={TwH[0]:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f})"
+                        )
+                    dict_df[target]["Tout"] = Tout
 
             # global:  what to do when len(Tw) != 1
             else:
-                Tw = [float(parameters[p]) for p in p_params["Tw"]]
-                dTw = [float(parameters[p]) for p in p_params["dTw"]]
-                hw = [float(parameters[p]) for p in p_params["hw"]]
+                Tw = [parameters[p] for p in p_params["Tw"]]
+                dTw = [parameters[p] for p in p_params["dTw"]]
+                hw = [parameters[p] for p in p_params["hw"]]
                 L = [
-                    abs(
-                        float(parameters[p])
-                        - float(parameters[p.replace("max", "min")])
-                    )
+                    abs(parameters[p] - parameters[p.replace("max", "min")])
                     for p in p_params["Zmax"]
                 ]
 
@@ -556,13 +693,11 @@ def solve(
 
         if e.isMasterRank():
             print(
-                f"it={it}, err_max={err_max}, err_max_dT={err_max_dT}, err_max_h={err_max_h}, eps={args.eps}, itmax={args.itermax}"
+                f"it={it}, err_max={err_max:.3e}, err_max_dT={err_max_dT:.3e}, err_max_h={err_max_h:.3e}, eps={args.eps}, itmax={args.itermax}"
             )
 
         table_.append(err_max)
         table.append(table_)
-        if e.isMasterRank():
-            print("create_field")
         create_field(f, targets, parameters, basedir, args.debug)
         if e.isMasterRank():
             print("create_field : done")
@@ -590,24 +725,8 @@ def solve(
 
     if err_max > args.eps or it >= args.itermax:
         raise RuntimeError(f"Fail to solve {jsonmodel}: err_max={err_max}, it={it}")
-    """
-    results = {}
-    legend = ""
-    for target in targets:
-        (name, val, paramsdict, params, bcs_params, targets, pfields, postvalues, pvalues) = objectif
-        results[name] = bcparams
-        legend = legend + f'{name}{val}A' 
-
-    resfile = args.cfgfile.replace('.cfg', f'-{legend}.csv')
-    if e.isMasterRank(): 
-        print(f"Export result to csv: {os.getcwd()}/{resfile}")
-    with open(resfile,"w+") as file:
-        df = pd.DataFrame(table, columns = headers)
-        df.to_csv(resfile, encoding='utf-8')
-    """
     if e.isMasterRank():
         os.remove(save_h5)
         os.remove(save_json)
 
     return (table_df, dict_df, e)
-
