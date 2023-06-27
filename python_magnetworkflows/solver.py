@@ -195,11 +195,15 @@ def solve(
                 "filename"
             ] = f"$cfgdir/U-it{it}.h5"
             # print(f'dict_json={dict_json}')
-            csvfiles = [ value["filename"] for p,value in dict_json["Parameters"].items() if isinstance(value,dict) ]
+            csvfiles = [
+                value["filename"]
+                for p, value in dict_json["Parameters"].items()
+                if isinstance(value, dict)
+            ]
             # print(f'cvsfiles: {csvfiles}')
             for file in csvfiles:
                 _file = file.replace("$cfgdir", basedir)
-                filename = _file.replace(".csv","")
+                filename = _file.replace(".csv", "")
                 shutil.copy2(f"{_file}", f"{_file}-it{it}.csv")
         with open(new_json, "w+") as jsonfile:
             jsonfile.write(json.dumps(dict_json, indent=4))
@@ -373,8 +377,11 @@ def solve(
             # per Channel/Slit
             if "H" in args.cooling:
                 TwH = [parameters[p] for p in p_params["TwH"]]
+                # print(f'TwH: {TwH} ({len(TwH)}/{len(Dh)})')
                 dTwH = [parameters[p] for p in p_params["dTwH"]]
+                # print(f"dTwH: {dTwH} ({len(dTwH)}/{len(Dh)})")
                 hwH = [parameters[p] for p in p_params["hwH"]]
+                # print(f'hwH: {hwH} ({len(hwH)}/{len(Dh)})')
                 Lh = [
                     abs(parameters[p] - parameters[p.replace("max", "min")])
                     for p in p_params["ZmaxH"]
@@ -391,7 +398,9 @@ def solve(
                     if args.debug:
                         print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
-                dTwH = [0] * len(Dh)
+                if not dTwH:
+                    dTwH = [0] * len(Dh)
+
                 dTwi = [0] * len(Dh)
                 Ti = [0] * len(Dh)
                 hi = [0] * len(Dh)
@@ -441,7 +450,7 @@ def solve(
                             """
 
                             _new = copy.deepcopy(_old)
-                            #print(f"_old: {_old}")
+                            # print(f"_old: {_old}")
                             for k, flux in enumerate(FluxCh_dz):
                                 dT_old = _old[k + 1] - _old[k]
                                 dT_new = getDT(
@@ -449,11 +458,11 @@ def solve(
                                 )
                                 _new[k + 1] = _new[k] + dT_new
 
-                            #print(f"_new: {_new}, relax={relax}")
+                            # print(f"_new: {_new}, relax={relax}")
                             for k in range(section):
                                 # print(f's={s}, {1-relax} * {_new[s]} + {relax} * {_old[s]}')
                                 _new[k] = (1 - relax) * _new[k] + relax * _old[k]
-                            #print(f"_new (after relax): {_new}")
+                            # print(f"_new (after relax): {_new}")
 
                             dTwi[i] = _new[-1] - _new[0]
                             tmp_hi = getHeatCoeff(
@@ -548,9 +557,11 @@ def solve(
                         U = Umean
                         tmp_dTwi = dTwH[i]
                         tmp_hi = hwH[i]
+                        """
                         print(
                             f"cname={cname}, i={i}, U={U:.3f}, tmp_dTwi={tmp_dTwi:.3f}, tmp_hi={tmp_hi:.3f}"
                         )
+                        """
                         while True:
                             tmp_flow = U * s
                             tmp_dTwi = getDT(
@@ -600,11 +611,11 @@ def solve(
                         dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[i]]
 
                         error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
-                        error_h[i].append(abs(1 - (hwH[i] / hi[i])))
+                        error_h.append(abs(1 - (hwH[i] / hi[i])))
 
                         if e.isMasterRank():
                             print(
-                                f"{target} {i}: cname={cname}, u={U:.3f}, Dh={d}, Sh={s}, Power={PowerCh:.3f}, TwH={TwH[i]:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}"
+                                f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d}, Sh={s}, Power={PowerCh:.3f}, TwH={TwH[i]:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}"
                             )
 
                         VolMass[i] = rho(TwH[i] + dTwi[i] / 2.0, Pressure)
