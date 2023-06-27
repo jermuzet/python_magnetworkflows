@@ -539,17 +539,25 @@ def solve(
                     )
                 dict_df[target]["Tout"] = Tw[0] + dTg
 
+                VolMassout = rho(Tw[0] + dTg, Pressure)
+                SpecHeatout = Cp(Tw[0] + dTg, Pressure)
+                Qout = flow.flow(abs(objectif))
+
+                List_Tout.append(Tw[0] + dTg)
+                List_VolMassout.append(VolMassout)
+                List_SpecHeatout.append(SpecHeatout)
+                List_Qout.append(Qout)
+
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
 
             err_max_dT = max(err_max_dT, max(error_dT))
             err_max_h = max(err_max_h, max(error_h))
 
-        if "H" in args.cooling and len(List_Tout) > 1:
+        if len(List_Tout) > 1:
             Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
 
-            dTg = Tout_site - TwH[0]
             if e.isMasterRank():
-                print(f"MSITE Tout={Tout_site}, Tw={TwH[0]}, dTg={dTg}")
+                print(f"MSITE Tout={Tout_site}")
 
         # update Parameters
         f.updateParameterValues()
