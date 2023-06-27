@@ -390,6 +390,7 @@ def main():
     """
     Commissioning = True
     e = None
+    commissioning_df=pd.DataFrame()
 
     global_df = {}
     I = []
@@ -406,7 +407,6 @@ def main():
         }
         I.append(values["value"])
 
-    nstep = 1
     while Commissioning:
 
         if rank == 0:
@@ -429,7 +429,7 @@ def main():
                 os.mkdir(outdir)
             table.to_csv(f"{outdir}/values.csv", index=False)
 
-            table_final = pd.DataFrame(["values"], columns=["measures"])
+            table_final = pd.DataFrame([f"{I}"], columns=["measures"])
 
             for target, values in dict_df.items():
                 mname = target[:-2]
@@ -465,6 +465,30 @@ def main():
                         list_dfT = [dfT for keyT, dfT in df.items()]
                         dfT = pd.concat(list_dfT, sort=True)
                         global_df[mname][key] = pd.concat([global_df[mname][key], dfT])
+                        
+                        if key == "statsTH":
+                            T_method = {
+                                "Min": min,
+                                "Max": max,
+                            }
+                            for (columnName, columnData) in dfT.iteritems():
+                                for T in ["Min","Max"] :
+                                    if "H" in columnName:
+                                        nH = int(columnName.split("H", 1)[1])
+
+                                        Tname = f"{mname}_{T}TH_H{nH-1}H{nH}[K]"
+                                        if nH % 2:
+                                            Tname = f"{mname}_{T}TH_H{nH}H{nH+1}[K]"
+
+                                        if Tname in table_final.columns:
+                                            table_final[Tname] = T_method[T](table_final[Tname],dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName])
+                                        else:
+                                            table_final[Tname] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
+
+                                    else:
+                                        table_final[
+                                            f"{mname}_T{T}_{columnName}[K]"
+                                        ] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
 
                 for (columnName, columnData) in table_final.iteritems():
                     if columnName.startswith(f"{mname}_Ucoil") :
@@ -480,17 +504,21 @@ def main():
 
         print(table_final.T)
 
+        if commissioning_df.empty :
+            commissioning_df = table_final.copy()
+        else :
+            commissioning_df = pd.concat([commissioning_df,table_final])
+
         i = 0
         for mname, values in args.mdata.items():
             filter = values["filter"]
-            targets[f"{filter}I"]["objectif"] -= nstep * values["step"]
+            targets[f"{filter}I"]["objectif"] -= values["step"]
             I[i] = targets[f"{filter}I"]["objectif"]
             if I[i] <= 0:
                 Commissioning = False
 
             i += 1
 
-        nstep += 1
 
     if rank == 0:
         for target, values in global_df.items():
@@ -507,6 +535,8 @@ def main():
                     if not os.path.exists(outdir):
                         os.mkdir(outdir)
                     df_T.to_csv(f"{outdir}/values.csv", index=True)
+        
+        commissioning_df.to_csv(f"measures.csv", index=True)
 
     return 0
 
