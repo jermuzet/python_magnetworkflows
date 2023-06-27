@@ -556,7 +556,6 @@ def solve(
         if len(List_Tout) > 1:
             Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
 
-            dict_df["MSite_Tout"] = Tout_site
             if e.isMasterRank():
                 print(f"MSITE Tout={Tout_site}")
 

@@ -46,7 +46,7 @@ def oneconfig(
     if rank == 0:
         print(f"oneconfig: jsonmodel={jsonmodel}, basedir={basedir}")
 
-    dict_df = {"MSite_Tout":0}
+    dict_df = {}
     for target, values in targets.items():
         if rank == 0:
             print(f"{target}: {values['objectif']}")

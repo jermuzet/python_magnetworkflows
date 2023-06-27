@@ -481,7 +481,7 @@ def main():
                                             Tname = f"{mname}_{T}TH_H{nH}H{nH+1}[K]"
 
                                         if Tname in table_final.columns:
-                                            table_final[Tname] = T_method[T](table_final[Tname],dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName])
+                                            table_final[Tname] = T_method[T](table_final[Tname].iloc[-1],dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName])
                                         else:
                                             table_final[Tname] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
 
@@ -497,9 +497,6 @@ def main():
             if "mag" in args.cfgfile:
                 df = pd.read_csv("magnetic.measures/values.csv")
                 table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
-
-            if dict_df["MSite_Tout"] != 0 :
-                table_final["Tout"] = dict_df["MSite_Tout"]
                 
             print("ONECONFIG DONE")
 
