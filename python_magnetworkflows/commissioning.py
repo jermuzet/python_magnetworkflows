@@ -74,6 +74,12 @@ def main():
         type=int,
         default=10,
     )
+    parser.add_argument(
+        "--stepmax",
+        help="specify maximum step number (default: 10)",
+        type=int,
+        default=10,
+    )
     parser.add_argument("--debug", help="activate debug", action="store_true")
     parser.add_argument("--verbose", help="activate verbose", action="store_true")
 
@@ -407,7 +413,9 @@ def main():
             "statsTH": pd.DataFrame(),
         }
         I.append(values["value"])
+    global_df["MSite"] = {"U":pd.DataFrame()}
 
+    nstep=0
     while Commissioning:
 
         if rank == 0:
@@ -429,6 +437,11 @@ def main():
             if not os.path.exists(outdir):
                 os.mkdir(outdir)
             table.to_csv(f"{outdir}/values.csv", index=False)
+
+            table=table.iloc[-1:].drop(['it'], axis=1)
+            table["I"]=f"I={I}A"
+            table.set_index("I",inplace=True)
+            global_df["MSite"]["U"] = pd.concat([global_df["MSite"]["U"], table.iloc[-1:]])
 
             table_final = pd.DataFrame([f"{I}"], columns=["measures"])
 
@@ -511,12 +524,13 @@ def main():
         else :
             commissioning_df = pd.concat([commissioning_df,table_final])
 
+        nstep+=1
         i = 0
         for mname, values in args.mdata.items():
             filter = values["filter"]
             targets[f"{filter}I"]["objectif"] -= values["step"]
             I[i] = targets[f"{filter}I"]["objectif"]
-            if I[i] <= 0:
+            if I[i] <= 0 or nstep >= args.stepmax:
                 Commissioning = False
 
             i += 1
@@ -524,7 +538,7 @@ def main():
 
     if rank == 0:
         for target, values in global_df.items():
-            mname = target[:-2]
+            mname = target
             for key, df in values.items():
                 if key in ["DT", "HeatCoeff"]:
                     outdir = f"{mname}_{key}.measures"
