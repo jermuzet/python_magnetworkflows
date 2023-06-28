@@ -9,6 +9,7 @@ import configparser
 
 import pandas as pd
 import json
+import re
 
 from .waterflow import waterflow
 from .real_methods import getDT, getHeatCoeff
@@ -473,9 +474,9 @@ def main():
                                     else:
                                         table_final[Tname] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
 
-                                else:
+                                elif not re.search(r"_?R\d+",columnName) :
                                     table_final[
-                                        f"{mname}_T{T}_{columnName}[K]"
+                                        f"{mname}_{T}TH_{columnName}[K]"
                                     ] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
 
             for (columnName, columnData) in table_final.iteritems():
