@@ -46,5 +46,5 @@
 		]
 	},
 	// Comment out the next line if you want to run as root instead
-	"remoteUser": "vscode"
+	"remoteUser": "feelpp"
 }

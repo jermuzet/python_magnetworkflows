@@ -45,7 +45,7 @@ def main():
         "--cooling",
         help="choose cooling type",
         type=str,
-        choices=["mean", "grad", "meanH", "gradH"],
+        choices=["mean", "grad", "meanH", "gradH", "gradHZ"],
         default="mean",
     )
     parser.add_argument(
@@ -93,6 +93,7 @@ def main():
     jsonmodel = ""
     meshmodel = ""
     feelpp_config = configparser.ConfigParser()
+    basedir = None
     with open(args.cfgfile, "r") as inputcfg:
         feelpp_config.read_string("[DEFAULT]\n[main]\n" + inputcfg.read())
         feelpp_directory = feelpp_config["main"]["directory"]
@@ -154,6 +155,15 @@ def main():
                     "post": {"type": "Statistics_Flux", "math": "integrate"},
                     "unit": "W",
                 }
+
+                if "Z" in args.cooling:
+                    Flux = {
+                        "name": "Flux",
+                        "csv": "heat.measures/values.csv",
+                        "rematch": f"Statistics_FluxZ\\d+_{filter}Channel\\d+_integrate",
+                        "post": {"type": "Statistics", "math": "integrate"},
+                        "unit": "W",
+                    }
 
                 HeatCoeff = {
                     "name": "HeatCoeff",
@@ -275,6 +285,15 @@ def main():
                     "unit": "W",
                 }
 
+                if "Z" in args.cooling:
+                    Flux = {
+                        "name": "Flux",
+                        "csv": "heat.measures/values.csv",
+                        "rematch": f"Statistics_FluxZ\\d+_{filter}\\w+_Slit\\d+_integrate",
+                        "post": {"type": "Statistics", "math": "integrate"},
+                        "unit": "W",
+                    }
+
                 HeatCoeff = {
                     "name": "HeatCoeff",
                     "params": [
@@ -375,8 +394,10 @@ def main():
                 "statsTH": [MinTH, MeanTH, MaxTH],
             }
 
+    """
     if rank == 0:
-        print(f"targets: {targets.keys()}")
+        print(f"targets: {targets}")
+    """
 
     """
     postvalues = {
@@ -428,7 +449,7 @@ def main():
                         table_final[f"{mname}_PowerM[MW]"] = df_T.iloc[0, 0] * 1e-6
                     elif key == "PowerH":
                         dfUcoil = df / dict_df[target]["target"]
-                        for (columnName, columnData) in dfUcoil.iteritems():
+                        for columnName, columnData in dfUcoil.iteritems():
                             if "H" in columnName:
                                 nH = int(columnName.split("H", 1)[1])
 
@@ -479,9 +500,11 @@ def main():
                                         f"{mname}_{T}TH_{columnName}[K]"
                                     ] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
 
-            for (columnName, columnData) in table_final.iteritems():
-                if columnName.startswith(f"{mname}_Ucoil") :
-                    table_final[columnName.replace("Ucoil","R(I)").replace("[V]","[ohm]")] = columnData/ dict_df[target]["target"]
+            for columnName, columnData in table_final.iteritems():
+                if columnName.startswith(f"{mname}_Ucoil"):
+                    table_final[
+                        columnName.replace("Ucoil", "R(I)").replace("[V]", "[ohm]")
+                    ] = (columnData / dict_df[target]["target"])
 
         outdir = f"U.measures"
         if not os.path.exists(outdir):
