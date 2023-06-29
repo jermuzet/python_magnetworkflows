@@ -233,6 +233,7 @@ def solve(
         List_VolMassout = []
         List_SpecHeatout = []
         List_Qout = []
+        Tw0 = None
         for target, values in targets.items():
             objectif = -values["objectif"]
             # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
@@ -255,10 +256,12 @@ def solve(
                     f"{target}: it={it}, err_max={err_max_target:.3e}, eps={args.eps:.3e}, itmax={args.itermax}"
                 )
 
+            print(f"filtered_df: {filtered_df.columns.values.tolist()}")
             for param in params[target]:
                 marker = param.replace(
                     "U_", ""
                 )  # get name from values['control_params'] / change control_params to a list of dict?
+                print(f"param={param}, marker={marker}")
                 val = filtered_df[marker].iloc[-1]
                 ovalue = parameters[param]
                 table_.append(ovalue)
@@ -407,7 +410,6 @@ def solve(
                 VolMass = [0] * len(Dh)
                 SpecHeat = [0] * len(Dh)
                 Q = [0] * len(Dh)
-                Tw0 = None
 
                 if "Z" in args.cooling:
                     NCoolingCh = len(Dh)
@@ -695,9 +697,9 @@ def solve(
         if "H" in args.cooling and len(List_Tout) > 1:
             Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
 
-            dTg = Tout_site - TwH[0]
+            dTg = Tout_site - Tw0
             if e.isMasterRank():
-                print(f"MSITE Tout={Tout_site}, Tw={TwH[0]}, dTg={dTg}")
+                print(f"MSITE Tout={Tout_site}, Tw={Tw0}, dTg={dTg}")
 
         # update Parameters
         f.updateParameterValues()
