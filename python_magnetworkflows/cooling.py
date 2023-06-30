@@ -70,7 +70,7 @@ def Montgomery(
     HMFL introduce an additional fuzzy factor
     """
     h = 1426.404 * (1 + 1.5e-2 * (Tw - 273)) * exp(log(U) * 0.8) / exp(log(Dh) * 0.2)
-    print(f"hcorrelation(Montgomery): h={h}")
+    # print(f"hcorrelation(Montgomery): h={h}")
     return h
 
 
