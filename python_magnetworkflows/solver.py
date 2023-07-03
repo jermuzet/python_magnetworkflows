@@ -261,12 +261,12 @@ def solve(
                 marker = param.replace(
                     "U_", ""
                 )  # get name from values['control_params'] / change control_params to a list of dict?
-                print(f"param={param}, marker={marker}")
                 val = filtered_df[marker].iloc[-1]
                 ovalue = parameters[param]
                 table_.append(ovalue)
                 nvalue = ovalue * objectif / val
                 if e.isMasterRank():
+                    print(f"param={param}, marker={marker}")
                     print(
                         f"{it}: {marker}, goal={objectif:.3f}, val={val:.3f}, err={error[marker].iloc[-1]:.3e}, ovalue={ovalue:.3f}, nvalue={nvalue:.3f}"
                     )
@@ -397,8 +397,7 @@ def solve(
 
                 # TODO verify if data are consistant??
                 # assert len(Dh) == len(TwH) == len(dTwH) == len(hwH)
-                if e.isMasterRank():
-                    if args.debug:
+                if e.isMasterRank() and args.debug:
                         print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
                 if not dTwH:
