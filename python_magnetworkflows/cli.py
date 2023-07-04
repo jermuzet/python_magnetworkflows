@@ -441,14 +441,12 @@ def main():
             for key, df in values.items():
                 if key in ["DT", "HeatCoeff"]:
                     outdir = f"{prefix}{key}.measures"
-                    if not os.path.exists(outdir):
-                        os.mkdir(outdir)
+                    os.makedirs(outdir, exist_ok=True)
                     df.to_csv(f"{outdir}/values_noT.csv", index=True)
                 if isinstance(df, pd.DataFrame):
                     df_T = df.T
                     outdir = f"{prefix}{key}.measures"
-                    if not os.path.exists(outdir):
-                        os.mkdir(outdir)
+                    os.makedirs(outdir, exist_ok=True)
                     df_T.to_csv(f"{outdir}/values.csv", index=True)
 
                     if key == "PowerM":
@@ -478,8 +476,7 @@ def main():
                     dfT = pd.concat(list_dfT, sort=True)
                     dfT_T=dfT.T
                     outdir = f"{prefix}{key}.measures"
-                    if not os.path.exists(outdir):
-                        os.mkdir(outdir)
+                    os.makedirs(outdir, exist_ok=True)
                     dfT_T.to_csv(f"{outdir}/values.csv", index=True)
 
                     if key == "statsTH":
