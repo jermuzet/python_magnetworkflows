@@ -434,8 +434,7 @@ def main():
         )
         if rank == 0:
             outdir = f"U_{I}.measures"
-            if not os.path.exists(outdir):
-                os.mkdir(outdir)
+            os.makedirs(outdir, exist_ok=True)
             table.to_csv(f"{outdir}/values.csv", index=False)
 
             table=table.iloc[-1:].drop(['it'], axis=1)
@@ -567,14 +566,12 @@ def main():
             for key, df in values.items():
                 if key in ["DT", "HeatCoeff"]:
                     outdir = f"{mname}_{key}.measures"
-                    if not os.path.exists(outdir):
-                        os.mkdir(outdir)
+                    os.makedirs(outdir, exist_ok=True)
                     df.to_csv(f"{outdir}/values_noT.csv", index=True)
                 if isinstance(df, pd.DataFrame):
                     df_T = df.T
                     outdir = f"{mname}_{key}.measures"
-                    if not os.path.exists(outdir):
-                        os.mkdir(outdir)
+                    os.makedirs(outdir, exist_ok=True)
                     df_T.to_csv(f"{outdir}/values.csv", index=True)
         
         commissioning_df.to_csv(f"measures.csv", index=True)

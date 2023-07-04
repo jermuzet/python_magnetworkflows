@@ -531,8 +531,7 @@ def main():
                     ] = (columnData / dict_df[target]["target"])
 
         outdir = f"U.measures"
-        if not os.path.exists(outdir):
-            os.mkdir(outdir)
+        os.makedirs(outdir, exist_ok=True)
         table.to_csv(f"{outdir}/values.csv", index=False)
 
         if "mag" in args.cfgfile:
