@@ -424,7 +424,11 @@ def solve(
                         csvfile = TwH[i]["filename"].replace("$cfgdir", basedir)
                         # replace $cfgdir by actual value from feelpp environment e
                         # print(f"cwd={os.getcwd()}, csvfile={csvfile}")
-                        Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
+                        if e.isMasterRank():
+                            Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
+                        else :
+                            Tw_data = None
+                        Tw_data = fpp.Environment.worldComm().localComm().bcast(Tw_data, root=0)
                         _old = Tw_data["Tw"].to_list()
                         _new = None
                         dTwH[i] = _old[-1] - _old[0]
@@ -504,7 +508,8 @@ def solve(
                         # save back to csv: T_z.to_csv(f"Tw_{cname}.csv", index=False)
                         Tw_data["Tw"] = _new
                         # print(f'save _new={_new} to {csvfile}')
-                        Tw_data.to_csv(f"{csvfile}", index=False)
+                        if e.isMasterRank :
+                            Tw_data.to_csv(f"{csvfile}", index=False)
 
                         # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                         f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
@@ -731,6 +736,7 @@ def solve(
             break
 
         # reload feelpp
+        fpp.Environment.worldComm().barrier()
         e.setConfigFile(args.cfgfile)
         f = cfpdes.cfpdes(dim=2)
         f.init()
