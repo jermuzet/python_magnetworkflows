@@ -261,12 +261,12 @@ def solve(
                 marker = param.replace(
                     "U_", ""
                 )  # get name from values['control_params'] / change control_params to a list of dict?
-                print(f"param={param}, marker={marker}")
                 val = filtered_df[marker].iloc[-1]
                 ovalue = parameters[param]
                 table_.append(ovalue)
                 nvalue = ovalue * objectif / val
                 if e.isMasterRank():
+                    print(f"param={param}, marker={marker}")
                     print(
                         f"{it}: {marker}, goal={objectif:.3f}, val={val:.3f}, err={error[marker].iloc[-1]:.3e}, ovalue={ovalue:.3f}, nvalue={nvalue:.3f}"
                     )
@@ -397,8 +397,7 @@ def solve(
 
                 # TODO verify if data are consistant??
                 # assert len(Dh) == len(TwH) == len(dTwH) == len(hwH)
-                if e.isMasterRank():
-                    if args.debug:
+                if e.isMasterRank() and args.debug:
                         print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
                 if not dTwH:
@@ -425,7 +424,11 @@ def solve(
                         csvfile = TwH[i]["filename"].replace("$cfgdir", basedir)
                         # replace $cfgdir by actual value from feelpp environment e
                         # print(f"cwd={os.getcwd()}, csvfile={csvfile}")
-                        Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
+                        if e.isMasterRank():
+                            Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
+                        else :
+                            Tw_data = None
+                        Tw_data = fpp.Environment.worldComm().localComm().bcast(Tw_data, root=0)
                         _old = Tw_data["Tw"].to_list()
                         _new = None
                         dTwH[i] = _old[-1] - _old[0]
@@ -505,7 +508,8 @@ def solve(
                         # save back to csv: T_z.to_csv(f"Tw_{cname}.csv", index=False)
                         Tw_data["Tw"] = _new
                         # print(f'save _new={_new} to {csvfile}')
-                        Tw_data.to_csv(f"{csvfile}", index=False)
+                        if e.isMasterRank :
+                            Tw_data.to_csv(f"{csvfile}", index=False)
 
                         # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                         f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
@@ -689,17 +693,25 @@ def solve(
                     )
                 dict_df[target]["Tout"] = Tw[0] + dTg
 
+                VolMassout = rho(Tw[0] + dTg, Pressure)
+                SpecHeatout = Cp(Tw[0] + dTg, Pressure)
+                Qout = flow.flow(abs(objectif))
+
+                List_Tout.append(Tw[0] + dTg)
+                List_VolMassout.append(VolMassout)
+                List_SpecHeatout.append(SpecHeatout)
+                List_Qout.append(Qout)
+
             # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
 
             err_max_dT = max(err_max_dT, max(error_dT))
             err_max_h = max(err_max_h, max(error_h))
 
-        if "H" in args.cooling and len(List_Tout) > 1:
+        if len(List_Tout) > 1:
             Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
 
-            dTg = Tout_site - Tw0
             if e.isMasterRank():
-                print(f"MSITE Tout={Tout_site}, Tw={Tw0}, dTg={dTg}")
+                print(f"MSITE Tout={Tout_site}")
 
         # update Parameters
         f.updateParameterValues()
@@ -724,6 +736,7 @@ def solve(
             break
 
         # reload feelpp
+        fpp.Environment.worldComm().barrier()
         e.setConfigFile(args.cfgfile)
         f = cfpdes.cfpdes(dim=2)
         f.init()
