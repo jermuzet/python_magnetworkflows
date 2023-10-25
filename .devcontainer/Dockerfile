@@ -28,7 +28,7 @@ ARG ARCH=amd64
 RUN apt update \
     && apt install -y lsb-release \
     && apt install -y debian-keyring \
-    &&cp /usr/share/keyrings/debian-maintainers.gpg /etc/apt/trusted.gpg.d \
+    && cp /usr/share/keyrings/debian-maintainers.gpg /etc/apt/trusted.gpg.d \
     # Configure apt and install packages \
     && apt-get update \
     && apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \

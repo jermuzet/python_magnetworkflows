@@ -102,14 +102,14 @@ def oneconfig(
             if isinstance(df, pd.DataFrame):
                 if rank == 0:
                     print(f"\t{key}:")
-                df["I"] = dict_df[target]["target"] # 'A'
+                df["I"] = f'I={dict_df[target]["target"]}A'
                 df.set_index("I", inplace=True)
                 if rank == 0:
                     print(df)
                 # df.to_markdown(tablefmt="psql") # requires pqndqs >= 1.0.0
             if key in ["statsT", "statsTH"]:
                 for keyT, dfT in df.items():
-                    dfT["I"] = dict_df[target]["target"] # 'A'
+                    dfT["I"] = f'{keyT}_I={dict_df[target]["target"]}A'
                     dfT.set_index("I", inplace=True)
 
     # update
