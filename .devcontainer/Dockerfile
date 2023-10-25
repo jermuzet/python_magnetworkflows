@@ -37,7 +37,7 @@ RUN apt update \
     && apt-get -y install git iproute2 procps lsb-release \
     #\
     # Install C++ tools\
-    && apt-get -y install build-essential python3-minimal libpython3.8 \
+    && apt-get -y install build-essential python3-minimal libpython3-dev \
     && apt-get -y install python-is-python3 python3-pip python3-jinja2 \
     && apt-get -y install python3-autopep8 black yapf3 python3-bandit flake8 pydocstyle pylint python3-pytest mypy \
     && apt-get -y install python3-statsmodels \
