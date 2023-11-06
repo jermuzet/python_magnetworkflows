@@ -45,7 +45,7 @@ def main():
         "--cooling",
         help="choose cooling type",
         type=str,
-        choices=["mean", "grad", "meanH", "gradH"],
+        choices=["mean", "grad", "meanH", "gradH","gradHZ"],
         default="mean",
     )
     parser.add_argument(
@@ -160,6 +160,15 @@ def main():
                     "post": {"type": "Statistics_Flux", "math": "integrate"},
                     "unit": "W",
                 }
+
+                if "Z" in args.cooling:
+                    Flux = {
+                        "name": "Flux",
+                        "csv": "heat.measures/values.csv",
+                        "rematch": f"Statistics_FluxZ\\d+_{filter}Channel\\d+_integrate",
+                        "post": {"type": "Statistics", "math": "integrate"},
+                        "unit": "W",
+                    }
 
                 HeatCoeff = {
                     "name": "HeatCoeff",
@@ -280,6 +289,15 @@ def main():
                     "post": {"type": "Statistics_Flux", "math": "integrate"},
                     "unit": "W",
                 }
+
+                if "Z" in args.cooling:
+                    Flux = {
+                        "name": "Flux",
+                        "csv": "heat.measures/values.csv",
+                        "rematch": f"Statistics_FluxZ\\d+_{filter}\\w+_Slit\\d+_integrate",
+                        "post": {"type": "Statistics", "math": "integrate"},
+                        "unit": "W",
+                    }
 
                 HeatCoeff = {
                     "name": "HeatCoeff",
