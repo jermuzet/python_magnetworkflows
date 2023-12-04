@@ -16,8 +16,7 @@ import pandas as pd
 
 from .params import getTarget, getparam
 from .waterflow import waterflow as w
-from .cooling import rho, Cp, Uw
-from .real_methods import getDT, getHeatCoeff, getTout
+from .cooling import rho, Cp, Uw, getDT, getHeatCoeff, getTout
 
 
 def create_field(
@@ -25,7 +24,7 @@ def create_field(
 ):
     """
     create and save a field in h5"""
-    # print("create_field")
+    print("create_field", flush=True)
 
     # TODO: pass space and order in method params
     Xh = fpp.functionSpace(space="Pdh", mesh=feel_pb.mesh(), order=0)
@@ -47,13 +46,15 @@ def create_field(
             )
 
     usave.save(wd, name="U")
-    # print("create_field: done")
+    print("create_field: done")
 
 
-def create_field_init(jsonmodel: str, meshmodel: str):
+def init_field(e, jsonmodel: str, meshmodel: str):
     """
     create and save a field in h5"""
-    # print("create_field")
+    # print("init_field", flush=True)
+    if e.isMasterRank():
+        print(f"init_field: jsonmodel={jsonmodel}, meshmodel={meshmodel}")
 
     m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
     Xh = fpp.functionSpace(space="Pdh", mesh=m2d, order=0)
@@ -70,57 +71,67 @@ def create_field_init(jsonmodel: str, meshmodel: str):
                 )
 
     usave.save(basedir, name="U")
-    # print("create_field: done")
+    # print("init_field: done", flush=True)
 
 
-def update(jsonmodel: str, parameters: dict):
+def update(e, jsonmodel: str, parameters: dict):
     """
     Update jsonmodel with parameters
     """
-    print(f"update {jsonmodel}")
+    if e.isMasterRank():
+        print(f"update {jsonmodel}", flush=True)
 
     dict_json = {}
     with open(jsonmodel, "r") as jsonfile:
         dict_json = json.loads(jsonfile.read())
         dict_json["Parameters"] = parameters
 
-    with open(jsonmodel, "w+") as jsonfile:
-        jsonfile.write(json.dumps(dict_json, indent=4))
+    if e.isMasterRank():
+        with open(jsonmodel, "w+") as jsonfile:
+            jsonfile.write(json.dumps(dict_json, indent=4))
+    e.worldComm().barrier()
 
     return 0
 
 
 # TODO create toolboxes_options on the fly
-def init(e, args, jsonmodel: str, meshmodel: str, directory: str = ""):
-    # pwd = os.getcwd()
+def init(fname, e, args, jsonmodel: str, meshmodel: str, directory: str = ""):
+    pwd = os.getcwd()
     if not e:
         e = fpp.Environment(
-            ["cli.py"],
+            [f"{fname}.py"],
             opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
             config=fpp.localRepository(directory),
         )
+        if e.isMasterRank():
+            print(f"init: feelpp env created (pwd={pwd}, cwd={os.getcwd()})")
 
-    create_field_init(jsonmodel, meshmodel)
+    init_field(e, f"{pwd}/{jsonmodel}", f"{pwd}/{meshmodel}")
 
     e.setConfigFile(args.cfgfile)
+    if e.isMasterRank():
+        print(f"init: setconfigfile", flush=True)
 
+    # if not comm is None:
+    #    f = cfpdes.cfpdes(dim=2, worldComm=comm)
+    # else:
+    f = cfpdes.cfpdes(dim=2)
     if e.isMasterRank():
         # print(f"init: pwd={pwd}")
-        print("Create cfpdes")
-    f = cfpdes.cfpdes(dim=2)
+        print("Create cfpdes done", flush=True)
 
-    if e.isMasterRank():
-        print("Init problem")
     f.init()
+    if e.isMasterRank():
+        print("Init problem done", flush=True)
     # f.printAndSaveInfo()
 
-    if e.isMasterRank():
-        print(f"init: done")
     return (e, f)
 
 
 def solve(
+    fname,
     e,
+    f,
     feelpp_directory: str,
     jsonmodel: str,
     meshmodel: str,
@@ -143,31 +154,44 @@ def solve(
 
     basedir = os.path.dirname(jsonmodel)  # get absolute path instead??
 
-    (e, f) = init(e, args, jsonmodel, meshmodel, directory=feelpp_directory)
+    if e is None:
+        (e, f) = init(fname, e, args, jsonmodel, meshmodel, directory=feelpp_directory)
+        if e.isMasterRank():
+            print("solve: load cfg", flush=True)
 
     if e.isMasterRank():
-        print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}")
+        print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}", flush=True)
 
-        # save original jsonmodel
-        save_json = f"{jsonmodel}.init"
-        if os.path.isfile(save_json):
-            raise RuntimeError(
-                f"solve: backup jsonmodel to {save_json} - fails since file already exists"
-            )
-        else:
-            # Rename the file
+    # save original jsonmodel
+    save_json = f"{jsonmodel}.init"
+    isFile = os.path.isfile(save_json)
+    e.worldComm().barrier()
+    if isFile:
+        raise RuntimeError(
+            f"solve: backup {jsonmodel} to {save_json} - fails since file already exists"
+        )
+    else:
+        # Rename the file
+        if e.isMasterRank():
             shutil.copy2(jsonmodel, save_json)
+        e.worldComm().barrier()
 
     # save original U.h5
-    if e.isMasterRank():
-        save_h5 = f"{basedir}/U.h5.init"
-        if os.path.isfile(save_h5):
-            raise RuntimeError(
-                f"solve: backup U.h5 to {save_h5} - fails since file already exists"
-            )
-        else:
-            # Rename the file
+    save_h5 = f"{basedir}/U.h5.init"
+    isFile = os.path.isfile(save_h5)
+    e.worldComm().barrier()
+    if isFile:
+        raise RuntimeError(
+            f"solve: backup U.h5 to {save_h5} - fails since file already exists"
+        )
+    else:
+        # Rename the file
+        if e.isMasterRank():
             shutil.copy2(f"{basedir}/U.h5", save_h5)
+        e.worldComm().barrier()
+
+    # how to do it properly in mpi ??
+    # check on each proc, return an error??
 
     it = 0
     err_max = 10 * args.eps
@@ -186,14 +210,14 @@ def solve(
     while it < args.itermax:
         new_json = jsonmodel.replace(".json", f"-it{it}-{post[:-1]}.json")
         if e.isMasterRank():
-            print(f"make a copy of files for it={it}, new_json={new_json}")
-        # shutil.copy2(jsonmodel, new_json)
+            print(f"make a copy of files for it={it}, new_json={new_json}", flush=True)
+
         dict_json = {}
         with open(jsonmodel, "r") as jsonfile:
             dict_json = json.loads(jsonfile.read())
             dict_json["Meshes"]["cfpdes"]["Fields"]["U"][
                 "filename"
-            ] = f"$cfgdir/U-it{it}.h5"
+            ] = f"$cfgdir/U-it{it}-{post[:-1]}.h5"
             # print(f'dict_json={dict_json}')
             csvfiles = [
                 value["filename"]
@@ -203,17 +227,19 @@ def solve(
             # print(f'cvsfiles: {csvfiles}')
             for file in csvfiles:
                 _file = file.replace("$cfgdir", basedir)
-                filename = _file.replace(".csv", "")
-                shutil.copy2(f"{_file}", f"{_file}-it{it}.csv")
-        with open(new_json, "w+") as jsonfile:
-            jsonfile.write(json.dumps(dict_json, indent=4))
-
-        shutil.copy2(f"{basedir}/U.h5", f"{basedir}/U-it{it}.h5")
+                if e.isMasterRank():
+                    shutil.copy2(f"{_file}", f"{_file}-it{it}.csv")
+                e.worldComm().barrier()
 
         if e.isMasterRank():
-            print(f"start calc for it={it}")
+            with open(new_json, "w+") as jsonfile:
+                jsonfile.write(json.dumps(dict_json, indent=4))
+
+            shutil.copy2(f"{basedir}/U.h5", f"{basedir}/U-it{it}-{post[:-1]}.h5")
+            # print(f"start calc for it={it}", flush=True)
             if args.debug:
                 print("Parameters:", f.modelProperties().parameters())
+        e.worldComm().barrier()
 
         # Solve and export the simulation
         try:
@@ -248,15 +274,19 @@ def solve(
             err_max = max(err_max_target, err_max)
             if e.isMasterRank():
                 if args.debug:
+                    print(
+                        f"filtered_df: {filtered_df.columns.values.tolist()}",
+                        flush=True,
+                    )
                     print(f"{target}: objectif={objectif}")
                     print(f"{target}: relax={relax}")
                     print(f"{target}: filtered_df={filtered_df}")
                     print(f"{target}: error={error}")
                 print(
-                    f"{target}: it={it}, err_max={err_max_target:.3e}, eps={args.eps:.3e}, itmax={args.itermax}"
+                    f"{target}: it={it}, err_max={err_max_target:.3e}, eps={args.eps:.3e}, itmax={args.itermax}",
+                    flush=True,
                 )
 
-            print(f"filtered_df: {filtered_df.columns.values.tolist()}")
             for param in params[target]:
                 marker = param.replace(
                     "U_", ""
@@ -266,10 +296,12 @@ def solve(
                 table_.append(ovalue)
                 nvalue = ovalue * objectif / val
                 if e.isMasterRank():
-                    print(f"param={param}, marker={marker}")
-                    print(
-                        f"{it}: {marker}, goal={objectif:.3f}, val={val:.3f}, err={error[marker].iloc[-1]:.3e}, ovalue={ovalue:.3f}, nvalue={nvalue:.3f}"
-                    )
+                    if args.debug:
+                        print(f"param={param}, marker={marker}")
+                        print(
+                            f"{it}: {marker}, goal={objectif:.3f}, val={val:.3f}, err={error[marker].iloc[-1]:.3e}, ovalue={ovalue:.3f}, nvalue={nvalue:.3f}",
+                            flush=True,
+                        )
                 f.addParameterInModelProperties(param, nvalue)
                 parameters[param] = nvalue
 
@@ -283,23 +315,24 @@ def solve(
 
             for param in values["computed_params"]:
                 name = param["name"]
-                if args.debug and e.isMasterRank():
-                    print(f"{target}: computed_params {name}")
+                if e.isMasterRank():
+                    print(f"{target}: computed_params {name}", flush=True)
 
                 if "csv" in param:
                     dict_df[target][name] = getTarget(
                         {f"{name}": param}, name, e, args.debug
                     )
                     if args.debug and e.isMasterRank():
-                        print(f"{target}: {name}={dict_df[target][name]}")
+                        print(f"{target}: {name}={dict_df[target][name]}", flush=True)
                 else:
                     if args.debug and e.isMasterRank():
-                        print(f"{target}: {name} computed")
+                        print(f"{target}: {name}", flush=True)
                     for p in param["params"]:
                         pname = p[0]
                         if args.debug and e.isMasterRank():
                             print(
-                                f"{name}: extract params for {p[0]} (len(p)={len(p)})"
+                                f"{name}: extract params for {p[0]} (len(p)={len(p)})",
+                                flush=True,
                             )
                         tmp = getparam(p[0], parameters, p[1], args.debug)
                         if len(p) == 4:
@@ -318,18 +351,23 @@ def solve(
             if args.debug and e.isMasterRank():
                 print(f"p_df: {dict_df[target].keys()}")
                 print(f"p_params: {p_params.keys()}")
-                print(f'p_params[Tw]={p_params["Tw"]}')
+                print(f'p_params[Tw]={p_params["Tw"]}', flush=True)
 
             for key in ["statsT", "statsTH"]:
                 for param in postvalues[target][key]:
                     name = param["name"]
                     if args.debug and e.isMasterRank():
-                        print(f"{target}: postvalues_params {name}")
+                        print(f"{target}: postvalues_params {name}", flush=True)
 
                     if "csv" in param:
                         dict_df[target][key][name] = getTarget(
                             {f"{name}": param}, name, e, args.debug
                         )
+
+            if args.debug and e.isMasterRank():
+                print(f"PowerM: {dict_df[target]['PowerM']}", flush=True)
+                print(f"PowerH: {dict_df[target]['PowerH']}", flush=True)
+                print(f"Flux: {dict_df[target]['Flux']}", flush=True)
 
             PowerM = dict_df[target]["PowerM"].iloc[-1, 0]
             SPower_H = dict_df[target]["PowerH"].iloc[-1].sum()
@@ -339,21 +377,43 @@ def solve(
             PowerFlux_Diff = abs(PowerM - SFlux_H)
             if e.isMasterRank():
                 print(
-                    f'{target}: it={it} Power={PowerM:.3f} SPower_H={SPower_H:.3f} SFlux_H={SFlux_H:.3f} \nPowerH=\n{dict_df[target]["PowerH"].iloc[-1]} \nUcoil=\n{dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}'
+                    f"{target}: it={it} Power={PowerM:.3f} SPower_H={SPower_H:.3f} SFlux_H={SFlux_H:.3f}",
+                    flush=True,
                 )
+                # print a table with key, power, ucoil
+                t_headers = ["Part", "Power[W]", "U[V]"]
+                t_parts = dict_df[target]["PowerH"].columns.values.tolist()
+                t_power = dict_df[target]["PowerH"].iloc[-1]
+                t_U = dict_df[target]["PowerH"].iloc[-1] / dict_df[target]["target"]
+                print(
+                    tabulate(list(zip(t_parts, t_power, t_U)), headers=t_headers),
+                    flush=True,
+                )
+                # print(
+                #    f'PowerH=\n{dict_df[target]["PowerH"].iloc[-1]} \nUcoil=\n{dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}',
+                #    flush=True,
+                # )
 
                 if args.debug:
-                    print("PowerM : ", dict_df[target]["PowerM"])
-                    print(f'{target}: PowerH {dict_df[target]["PowerH"]}')
+                    print("PowerM : ", dict_df[target]["PowerM"], flush=True)
+                    print(f'{target}: PowerH {dict_df[target]["PowerH"]}', flush=True)
                     for key in p_params:
-                        print(f"{target}: {key}={p_params[key]}")
+                        print(f"{target}: {key}={p_params[key]}", flush=True)
 
             assert (
                 Powers_Diff / PowerM < 1e-3
-            ), f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM} SPower_H={SPower_H}"
+            ), f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM:.3f} SPower_H={SPower_H:.3f}"
             assert (
                 PowerFlux_Diff / PowerM < 1e-1
-            ), f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM} SFlux_H={SFlux_H}"
+            ), f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM:.3f} SFlux_H={SFlux_H:.3f}"
+
+            # get dict_df[target]["Flux"] column names
+            if e.isMasterRank():
+                for i, cname in enumerate(
+                    dict_df[target]["Flux"].columns.values.tolist()
+                ):
+                    flux = dict_df[target]["Flux"][cname].iloc[-1]
+                    print(f"{target} Channel{i} Flux[cname={cname}]: {flux:.3f}")
 
             flow = values["waterflow"]
             Pressure = flow.pressure(abs(objectif))
@@ -364,14 +424,22 @@ def solve(
             if args.debug and e.isMasterRank():
                 i = 0
                 for p in p_params["Dh"]:
-                    print(f"Dh[{i}]: key={p}, value={parameters[p]}")
+                    print(f"Dh[{i}]: key={p}, value={parameters[p]}", flush=True)
                     i += 1
                 print(f'Dh: {p_params["Dh"]}')
 
             Umean = flow.umean(abs(objectif), sum(Sh))  # math.fsum(Sh)
+            dT_global = getDT(
+                Umean * sum(Sh),
+                PowerM,
+                290.75,
+                0,
+                Pressure,
+            )
             if e.isMasterRank():
                 print(
-                    f"{target}: it={it}, objectif={abs(objectif):.3f}, Umean={Umean:.3f}, Flow={flow.flow(abs(objectif)):.3f}"
+                    f"{target}: it={it}, objectif={abs(objectif):.3f}, Umean={Umean:.3f}, Flow={flow.flow(abs(objectif)):.3f}, S={sum(Sh):.3f}, dT_global={dT_global:.3f}, Power={PowerM:.3f}",
+                    flush=True,
                 )
             dict_df[target]["flow"] = flow.flow(abs(objectif))
 
@@ -380,6 +448,9 @@ def solve(
             # per Channel/Slit
             if "H" in args.cooling:
                 TwH = [parameters[p] for p in p_params["TwH"]]
+                if e.isMasterRank():
+                    for p in p_params["TwH"]:
+                        print(f"TwH: parameters[{p}]={parameters[p]}")
                 # print(f'TwH: {TwH} ({len(TwH)}/{len(Dh)})')
                 dTwH = [parameters[p] for p in p_params["dTwH"]]
                 # print(f"dTwH: {dTwH} ({len(dTwH)}/{len(Dh)})")
@@ -390,15 +461,12 @@ def solve(
                     for p in p_params["ZmaxH"]
                 ]
                 if args.debug and e.isMasterRank():
-                    i = 0
-                    for p in p_params["hwH"]:
-                        print(f"hwH[{i}]: key={p}, value={parameters[p]}")
-                        i += 1
+                    for i, p in enumerate(p_params["hwH"]):
+                        print(f"hwH[{i}]: key={p}, value={parameters[p]}", flush=True)
 
-                # TODO verify if data are consistant??
-                # assert len(Dh) == len(TwH) == len(dTwH) == len(hwH)
-                if e.isMasterRank() and args.debug:
-                        print(f'{target} Flux: {dict_df[target]["Flux"]}')
+                    # TODO verify if data are consistant??
+                    # assert len(Dh) == len(TwH) == len(dTwH) == len(hwH)
+                    print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
                 if not dTwH:
                     dTwH = [0] * len(Dh)
@@ -412,7 +480,7 @@ def solve(
 
                 if "Z" in args.cooling:
                     NCoolingCh = len(Dh)
-                    FluxZ = copy.deepcopy(dict_df[target]["Flux"])
+                    FluxZ = dict_df[target]["FluxZ"]
 
                     for i, (d, s) in enumerate(zip(Dh, Sh)):
                         cname = p_params["Dh"][i].replace("Dh_", "")
@@ -424,13 +492,9 @@ def solve(
                         csvfile = TwH[i]["filename"].replace("$cfgdir", basedir)
                         # replace $cfgdir by actual value from feelpp environment e
                         # print(f"cwd={os.getcwd()}, csvfile={csvfile}")
-                        if e.isMasterRank():
-                            Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
-                        else :
-                            Tw_data = None
-                        Tw_data = fpp.Environment.worldComm().localComm().bcast(Tw_data, root=0)
+                        Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
+                        nsections = len(Tw_data)
                         _old = Tw_data["Tw"].to_list()
-                        _new = None
                         dTwH[i] = _old[-1] - _old[0]
                         section = len(_old)
 
@@ -440,34 +504,65 @@ def solve(
                             for fkey in FluxZ.columns.values.tolist()
                             if fkey.endswith(cname)
                         ]
-                        # print(f'key_dz={key_dz}')
-                        FluxCh_dz = [FluxZ[fkey].iloc[-1] for fkey in key_dz]
+                        assert (
+                            nsections == len(key_dz) + 1
+                        ), f"inconsistant data for Tw and FluxZ for {cname}"
+                        if args.debug and e.isMasterRank():
+                            print(f"key_dz={key_dz}")
+                        FluxCh_dz = [
+                            FluxZ.at[FluxZ.index[-1], f"FluxZ{i}_{cname}"]
+                            for i in range(len(key_dz))
+                        ]
                         PowerCh = sum(FluxCh_dz)
-                        dict_df[target]["Flux"].drop(columns=key_dz, inplace=True)
+                        if e.isMasterRank():
+                            print(
+                                f'\nFlux/Sum(FluxZ)[{cname}]: {PowerCh:.3f} = {dict_df[target]["Flux"][cname].iloc[-1]:.3f}',
+                                flush=True,
+                            )
+                            if args.debug:
+                                for k, flux in enumerate(FluxCh_dz):
+                                    print(f"{key_dz[k]} FluxZ[{k}]={flux:.3f}")
+                        assert (
+                            abs(1 - PowerCh / dict_df[target]["Flux"][cname].iloc[-1])
+                            < 1e-1
+                        ), f"Sum(FluxZ)!=Flux[{cname}]: PowerCh={PowerCh} Flux_H={dict_df[target]['Flux'][cname].iloc[-1]} (res={PowerCh / dict_df[target]['Flux'][cname].iloc[-1]})"
 
                         while True:
                             tmp_flow = U * s
-                            """
-                            if e.isMasterRank():
-                                print(
-                                    f"FluxZ[{cname}]: sum_dz={PowerCh}, key_dz={key_dz}"
-                                )
-                            """
 
+                            dT_Ch = getDT(
+                                tmp_flow,
+                                PowerCh,
+                                (_old[0] + _old[-1]) / 2.0,
+                                0,
+                                Pressure,
+                            )
                             _new = copy.deepcopy(_old)
-                            # print(f"_old: {_old}")
+                            if args.debug and e.isMasterRank():
+                                print(f"gradHZ: {cname} _old: {_old}")
                             for k, flux in enumerate(FluxCh_dz):
                                 dT_old = _old[k + 1] - _old[k]
                                 dT_new = getDT(
-                                    tmp_flow, flux, _old[k], dT_old, Pressure
+                                    tmp_flow,
+                                    flux,
+                                    (_old[k] + _old[k + 1]) / 2.0,
+                                    0,
+                                    Pressure,
                                 )
+                                if e.isMasterRank():
+                                    print(
+                                        f"gradHZ: {cname} {key_dz[k]} - flow={tmp_flow:.3f}, power={flux:.3f}, Tw={_old[k]:.3f}, dTw={dT_old:.3f}, P={Pressure:.3f}, dT={dT_new:.3f}, dTch={dT_Ch:.3f}"
+                                    )
                                 _new[k + 1] = _new[k] + dT_new
 
                             # print(f"_new: {_new}, relax={relax}")
                             for k in range(section):
                                 # print(f's={s}, {1-relax} * {_new[s]} + {relax} * {_old[s]}')
                                 _new[k] = (1 - relax) * _new[k] + relax * _old[k]
-                            # print(f"_new (after relax): {_new}")
+                            if e.isMasterRank():
+                                print(
+                                    f"gradHZ: {cname} _new (after relax={relax}): {_new}"
+                                )
 
                             dTwi[i] = _new[-1] - _new[0]
                             tmp_hi = getHeatCoeff(
@@ -482,22 +577,23 @@ def solve(
                                 friction=args.friction,
                             )
 
-                            if args.heatcorrelation != "Montgomery":
-                                tmp_U = Uw(
-                                    _new[0] + dTwi[-1] / 2.0,
-                                    Pressure,
-                                    dPressure,
-                                    d,
-                                    Lh[i],
-                                    friction=args.friction,
-                                    uguess=U,
+                            tmp_U = Uw(
+                                _new[0] + dTwi[-1] / 2.0,
+                                Pressure,
+                                dPressure,
+                                d,
+                                Lh[i],
+                                friction=args.friction,
+                                uguess=U,
+                            )
+                            n_tmp_flow = tmp_U * s
+                            if args.debug and e.isMasterRank():
+                                print(
+                                    f"tmp_flow={tmp_flow:.3f}, n_tmp_flow={n_tmp_flow:.3f}, U={U:.3f}, tmp_U={tmp_U:.3f}, dTwH[{i}]={dTwH[i]:.3f}, tmp_dTwi={tmp_dTwi:.3f}"
                                 )
-                                n_tmp_flow = tmp_U * s
-                                U = tmp_U
+                            U = tmp_U
 
-                                if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
-                                    break
-                            else:
+                            if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
                                 break
 
                             _old = copy.deepcopy(_new)
@@ -508,8 +604,9 @@ def solve(
                         # save back to csv: T_z.to_csv(f"Tw_{cname}.csv", index=False)
                         Tw_data["Tw"] = _new
                         # print(f'save _new={_new} to {csvfile}')
-                        if e.isMasterRank :
+                        if e.isMasterRank:
                             Tw_data.to_csv(f"{csvfile}", index=False)
+                        e.worldComm().barrier()
 
                         # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
                         f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
@@ -518,7 +615,7 @@ def solve(
                         dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[i]]
                         dict_df[target]["DT"][cname] = [dTwi[i]]
                         # !! export FluxZ = dict_df[target]["Flux"] with sections regrouped !!
-                        dict_df[target]["Flux"][cname] = PowerCh
+                        # dict_df[target]["Flux"][cname] = PowerCh
 
                         error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
                         error_h.append(abs(1 - (hwH[i] / hi[i])))
@@ -526,15 +623,19 @@ def solve(
                         Tw0 = Tw_data["Tw"].iloc[0]
                         if e.isMasterRank():
                             print(
-                                f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d}, Sh={s}, Power={PowerCh:.3f}, TwH={Tw0:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}"
+                                f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d:3e}, Sh={s:.3e}, Power={PowerCh:.3f}, TwH={Tw0:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}",
+                                flush=True,
                             )
 
                         Ti[i] = Tw0 + dTwi[i]
                         VolMass[i] = rho(Tw0 + dTwi[i] / 2.0, Pressure)
                         SpecHeat[i] = Cp(Tw0 + dTwi[i] / 2.0, Pressure)
 
-                    if args.debug and e.isMasterRank():
-                        print(f"Q-flow={sum(Q)-flow.flow(abs(objectif))}")
+                    if e.isMasterRank():
+                        print(
+                            f"Flow={flow.flow(abs(objectif)):.3f}, Sum(Qh)={sum(Q):.3f}, Sum(Sh)={sum(Sh):.3e}",
+                            flush=True,
+                        )
 
                     # compute an estimate of dTg
                     Tout = getTout(Ti, VolMass, SpecHeat, Q)
@@ -550,7 +651,8 @@ def solve(
                     dTg = Tout - Tw0
                     if e.isMasterRank():
                         print(
-                            f"{target}: Tout={Tout:.3f}  Tw={Tw0:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f})"
+                            f"{target}: Tout={Tout:.3f}  Tw={Tw0:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f})",
+                            flush=True,
                         )
                     dict_df[target]["Tout"] = Tout
                     # exit(1)
@@ -563,11 +665,12 @@ def solve(
                         U = Umean
                         tmp_dTwi = dTwH[i]
                         tmp_hi = hwH[i]
-                        """
-                        print(
-                            f"cname={cname}, i={i}, U={U:.3f}, tmp_dTwi={tmp_dTwi:.3f}, tmp_hi={tmp_hi:.3f}"
-                        )
-                        """
+                        if e.isMasterRank():
+                            print(
+                                f"\ncname={cname}, i={i}, d={d:.5f}, s={s:.5f}, L={Lh[i]:.3f}, U={U:.3f}, PowerCh={PowerCh:.3f}, tmp_dTwi={tmp_dTwi:.3f}, tmp_hi={tmp_hi:.3f}",
+                                flush=True,
+                            )
+
                         while True:
                             tmp_flow = U * s
                             tmp_dTwi = getDT(
@@ -586,22 +689,23 @@ def solve(
                                 friction=args.friction,
                             )
 
-                            if args.heatcorrelation != "Montgomery":
-                                tmp_U = Uw(
-                                    TwH[i] + tmp_dTwi / 2.0,
-                                    Pressure,
-                                    dPressure,
-                                    d,
-                                    Lh[i],
-                                    friction=args.friction,
-                                    uguess=U,
+                            tmp_U = Uw(
+                                TwH[i] + tmp_dTwi / 2.0,
+                                Pressure,
+                                dPressure,
+                                d,
+                                Lh[i],
+                                friction=args.friction,
+                                uguess=U,
+                            )
+                            n_tmp_flow = tmp_U * s
+                            if args.debug and e.isMasterRank():
+                                print(
+                                    f"tmp_flow={tmp_flow:.3f}, n_tmp_flow={n_tmp_flow:.3f}, U={U:.3f}, tmp_U={tmp_U:.3f}, dTwH[{i}]={dTwH[i]:.3f}, tmp_dTwi={tmp_dTwi:.3f}"
                                 )
-                                n_tmp_flow = tmp_U * s
-                                U = tmp_U
+                            U = tmp_U
 
-                                if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
-                                    break
-                            else:
+                            if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
                                 break
 
                         Q[i] = tmp_flow
@@ -621,14 +725,18 @@ def solve(
 
                         if e.isMasterRank():
                             print(
-                                f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d}, Sh={s}, Power={PowerCh:.3f}, TwH={TwH[i]:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}"
+                                f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d:.3e}, Sh={s:.3e}, Power={PowerCh:.3f}, TwH={TwH[i]:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}",
+                                flush=True,
                             )
 
                         VolMass[i] = rho(TwH[i] + dTwi[i] / 2.0, Pressure)
                         SpecHeat[i] = Cp(TwH[i] + dTwi[i] / 2.0, Pressure)
 
-                    if args.debug and e.isMasterRank():
-                        print(f"Q-flow={sum(Q)-flow.flow(abs(objectif))}")
+                    if e.isMasterRank():
+                        print(
+                            f"Flow={flow.flow(abs(objectif)):.3f}, Sum(Qh)={sum(Q):.3f}, Sum(Sh)={sum(Sh):.3e}",
+                            flush=True,
+                        )
 
                     # TODO compute an estimate of dTg
                     # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
@@ -645,7 +753,8 @@ def solve(
                     dTg = Tout - TwH[0]
                     if e.isMasterRank():
                         print(
-                            f"{target}: Tout={Tout:.3f}  Tw={TwH[0]:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f})"
+                            f"{target}: Tout={Tout:.3f}  Tw={TwH[0]:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f})",
+                            flush=True,
                         )
                     dict_df[target]["Tout"] = Tout
 
@@ -660,8 +769,11 @@ def solve(
                 ]
 
                 for i, T in enumerate(Tw):
-                    if e.isMasterRank():
-                        print(f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}")
+                    if args.debug and e.isMasterRank():
+                        print(
+                            f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}",
+                            flush=True,
+                        )
                     dTg = getDT(
                         flow.flow(abs(objectif)), PowerM, Tw[i], dTw[i], Pressure
                     )
@@ -689,7 +801,8 @@ def solve(
 
                 if args.debug and e.isMasterRank():
                     print(
-                        f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={PowerM}, dTg={dTg}, hg={hg}'
+                        f'{target}: Tw={Tw[0]}, param={p_params["dTw"][0]}, umean={Umean}, Power={PowerM}, dTg={dTg}, hg={hg}',
+                        flush=True,
                     )
                 dict_df[target]["Tout"] = Tw[0] + dTg
 
@@ -711,22 +824,23 @@ def solve(
             Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
 
             if e.isMasterRank():
-                print(f"MSITE Tout={Tout_site}")
+                print(f"MSITE Tout={Tout_site}", flush=True)
 
         # update Parameters
         f.updateParameterValues()
 
         if e.isMasterRank():
             print(
-                f"it={it}, err_max={err_max:.3e}, err_max_dT={err_max_dT:.3e}, err_max_h={err_max_h:.3e}, eps={args.eps}, itmax={args.itermax}"
+                f"it={it}, err_max={err_max:.3e}, err_max_dT={err_max_dT:.3e}, err_max_h={err_max_h:.3e}, eps={args.eps}, itmax={args.itermax}",
+                flush=True,
             )
 
         table_.append(err_max)
         table.append(table_)
         create_field(f, targets, parameters, basedir, args.debug)
         if e.isMasterRank():
-            print("create_field : done")
-            update(jsonmodel, parameters)
+            # print("create_field : done", flush=True)
+            update(e, jsonmodel, parameters)
 
         if (
             err_max <= args.eps
@@ -736,23 +850,38 @@ def solve(
             break
 
         # reload feelpp
-        fpp.Environment.worldComm().barrier()
-        e.setConfigFile(args.cfgfile)
-        f = cfpdes.cfpdes(dim=2)
-        f.init()
+        if args.reloadcfg:
+            print("reload cfg")
+            e.worldComm().barrier()
+            e.setConfigFile(args.cfgfile)
+            f = cfpdes.cfpdes(dim=2)
+            f.init()
 
         it += 1
 
     # Save table (need headers)
     if e.isMasterRank():
-        print(tabulate(table, headers, tablefmt="simple"))
+        print(tabulate(table, headers, tablefmt="simple"), flush=True)
 
     table_df = pd.DataFrame(table, columns=headers)
 
     if err_max > args.eps or it >= args.itermax:
         raise RuntimeError(f"Fail to solve {jsonmodel}: err_max={err_max}, it={it}")
+
     if e.isMasterRank():
         os.remove(save_h5)
         os.remove(save_json)
+        for i in range(it):
+            print(f"remove {basedir}/U-it{i}-{post[:-1]}.h5")
+            os.remove(f"{basedir}/U-it{i}-{post[:-1]}.h5")
+            tmp_jsonmodel = jsonmodel.replace(".json", f"-it{i}-{post[:-1]}.json")
+            print(f"remove {tmp_jsonmodel}")
+            os.remove(tmp_jsonmodel)
+        if "Z" in args.cooling:
+            for i in range(1, it):
+                for file in csvfiles:
+                    _file = file.replace("$cfgdir", basedir)
+                    print(f"remove {_file}-it{it}.csv")
+                    os.remove(f"remove {_file}-it{it}.csv")
 
     return (table_df, dict_df, e)
