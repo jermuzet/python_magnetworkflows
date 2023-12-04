@@ -12,9 +12,10 @@ import json
 import re
 
 from .waterflow import waterflow
-from .real_methods import getDT, getHeatCoeff
+from .cooling import getDT, getHeatCoeff
 
 from .oneconfig import oneconfig
+from .solver import init
 
 from mpi4py import MPI
 
@@ -29,9 +30,6 @@ def main():
         "\n"
         "Before running adapt flow_params to your magnet setup \n"
     )
-
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
 
     command_line = None
     parser = argparse.ArgumentParser(description="Cfpdes model", epilog=epilog)
@@ -74,16 +72,13 @@ def main():
         type=int,
         default=10,
     )
+    parser.add_argument("--reloadcfg", help="get feelpp config", action="store_true")
     parser.add_argument("--debug", help="activate debug", action="store_true")
     parser.add_argument("--verbose", help="activate verbose", action="store_true")
 
     args = parser.parse_args()
-    if args.debug and rank == 0:
-        print(args)
 
     pwd = os.getcwd()
-    if rank == 0:
-        print(f"cwd: {pwd}")
 
     # Load units:
     # TODO force millimeter when args.method == "HDG"
@@ -97,24 +92,16 @@ def main():
     with open(args.cfgfile, "r") as inputcfg:
         feelpp_config.read_string("[DEFAULT]\n[main]\n" + inputcfg.read())
         feelpp_directory = feelpp_config["main"]["directory"]
-        if rank == 0:
-            print(f"feelpp_directory={feelpp_directory}")
 
         basedir = os.path.dirname(args.cfgfile)
-        if rank == 0:
-            print(f"basedir={basedir}")
         if not basedir:
             basedir = "."
 
         jsonmodel = feelpp_config["cfpdes"]["filename"]
         jsonmodel = jsonmodel.replace(r"$cfgdir/", f"{basedir}/")
-        if rank == 0:
-            print(f"jsonmodel={jsonmodel}")
 
         meshmodel = feelpp_config["cfpdes"]["mesh.filename"]
         meshmodel = meshmodel.replace(r"$cfgdir/", f"{basedir}/")
-        if rank == 0:
-            print(f"meshmodel={meshmodel}")
 
     # Get Parameters from JSON model file
     parameters = {}
@@ -122,13 +109,32 @@ def main():
         dict_json = json.loads(jsonfile.read())
         parameters = dict_json["Parameters"]
 
+    print(args)
+    print(f"cwd: {pwd}")
+    print(f"feelpp_directory={feelpp_directory}")
+    print(f"basedir={basedir}")
+    print(f"jsonmodel={jsonmodel}")
+    print(f"meshmodel={meshmodel}")
+
+    fname = "cli"
+    e = None
+    (e, f) = init(fname, e, args, jsonmodel, meshmodel, directory=feelpp_directory)
+
+    if e.isMasterRank():
+        print(args)
+        print(f"cwd: {pwd}")
+        print(f"feelpp_directory={feelpp_directory}")
+        print(f"basedir={basedir}")
+        print(f"jsonmodel={jsonmodel}")
+        print(f"meshmodel={meshmodel}")
+
     targets = {}
     postvalues = {}
 
     # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
     if args.mdata:
         for mname, values in args.mdata.items():
-            if rank == 0:
+            if e.isMasterRank():
                 print(f"mname={mname}, values={values}")
             filter = values["filter"]
             if values["type"] == "helix":
@@ -155,15 +161,6 @@ def main():
                     "post": {"type": "Statistics_Flux", "math": "integrate"},
                     "unit": "W",
                 }
-
-                if "Z" in args.cooling:
-                    Flux = {
-                        "name": "Flux",
-                        "csv": "heat.measures/values.csv",
-                        "rematch": f"Statistics_FluxZ\\d+_{filter}Channel\\d+_integrate",
-                        "post": {"type": "Statistics", "math": "integrate"},
-                        "unit": "W",
-                    }
 
                 HeatCoeff = {
                     "name": "HeatCoeff",
@@ -257,8 +254,19 @@ def main():
                     "unit": "A",
                     "name": f"Intensity_{filter}",
                     "post": {"type": "Statistics_Intensity", "math": "integrate"},
-                    "waterflow": waterflow.flow_params(values["flow"]),
+                    "waterflow": waterflow.flow_params(f'{pwd}/{values["flow"]}'),
                 }
+                if "Z" in args.cooling:
+                    if e.isMasterRank():
+                        print("add FluxZ for Insert")
+                    FluxZ = {
+                        "name": "FluxZ",
+                        "csv": "heat.measures/values.csv",
+                        "rematch": f"Statistics_FluxZ\\d+_{filter}Channel\\d+_integrate",
+                        "post": {"type": "Statistics", "math": "integrate"},
+                        "unit": "W",
+                    }
+                    targets[f"{filter}I"]["computed_params"].append(FluxZ)
 
             if values["type"] == "bitter":
                 # change rematch, params, control_params
@@ -284,15 +292,6 @@ def main():
                     "post": {"type": "Statistics_Flux", "math": "integrate"},
                     "unit": "W",
                 }
-
-                if "Z" in args.cooling:
-                    Flux = {
-                        "name": "Flux",
-                        "csv": "heat.measures/values.csv",
-                        "rematch": f"Statistics_FluxZ\\d+_{filter}\\w+_Slit\\d+_integrate",
-                        "post": {"type": "Statistics", "math": "integrate"},
-                        "unit": "W",
-                    }
 
                 HeatCoeff = {
                     "name": "HeatCoeff",
@@ -386,18 +385,24 @@ def main():
                     "unit": "A",
                     "name": f"Intensity{filter}",
                     "post": {"type": "Statistics_Intensity", "math": "integrate"},
-                    "waterflow": waterflow.flow_params(values["flow"]),
+                    "waterflow": waterflow.flow_params(f'{pwd}/{values["flow"]}'),
                 }
+                if "Z" in args.cooling:
+                    if e.isMasterRank():
+                        print("add FluxZ for Bitter")
+                    FluxZ = {
+                        "name": "FluxZ",
+                        "csv": "heat.measures/values.csv",
+                        "rematch": f"Statistics_FluxZ\\d+_{filter}\\w+_Slit\\d+_integrate",
+                        "post": {"type": "Statistics", "math": "integrate"},
+                        "unit": "W",
+                    }
+                    targets[f"{filter}I"]["computed_params"].append(FluxZ)
 
             postvalues[f"{filter}I"] = {
                 "statsT": [MinT, MeanT, MaxT],
                 "statsTH": [MinTH, MeanTH, MaxTH],
             }
-
-    """
-    if rank == 0:
-        print(f"targets: {targets}")
-    """
 
     """
     postvalues = {
@@ -410,11 +415,11 @@ def main():
                 'MinHoop', 'MeanHoop', 'MaxHoop']
     
     """
-    e = None
 
     (table, dict_df, e) = oneconfig(
+        fname,
         e,
-        comm,
+        f,
         feelpp_directory,
         f"{pwd}/{jsonmodel}",
         f"{pwd}/{meshmodel}",
@@ -424,19 +429,19 @@ def main():
         parameters,
     )
 
-    if rank == 0:
+    if e.isMasterRank():
         table_final = pd.DataFrame(["values"], columns=["measures"])
 
         for target, values in dict_df.items():
             mname = target[:-2]
-            prefix=""
-            if mname :
-                prefix=f"{mname}_"
-                
+            prefix = ""
+            if mname:
+                prefix = f"{mname}_"
+
             table_final[f"{prefix}I"] = dict_df[target]["target"]
             table_final[f"{prefix}flow[l/s]"] = dict_df[target]["flow"] * 1e3
             table_final[f"{prefix}Tout[K]"] = dict_df[target]["Tout"]
-            
+
             print("\n")
             for key, df in values.items():
                 if key in ["DT", "HeatCoeff"]:
@@ -453,7 +458,7 @@ def main():
                         table_final[f"{prefix}PowerM[MW]"] = df_T.iloc[0, 0] * 1e-6
                     elif key == "PowerH":
                         dfUcoil = df / dict_df[target]["target"]
-                        for columnName, columnData in dfUcoil.iteritems():
+                        for columnName, columnData in dfUcoil.items():
                             if "H" in columnName:
                                 nH = int(columnName.split("H", 1)[1])
 
@@ -474,7 +479,7 @@ def main():
                 if key in ["statsT", "statsTH"]:
                     list_dfT = [dfT for keyT, dfT in df.items()]
                     dfT = pd.concat(list_dfT, sort=True)
-                    dfT_T=dfT.T
+                    dfT_T = dfT.T
                     outdir = f"{prefix}{key}.measures"
                     os.makedirs(outdir, exist_ok=True)
                     dfT_T.to_csv(f"{outdir}/values.csv", index=True)
@@ -484,8 +489,8 @@ def main():
                             "Min": min,
                             "Max": max,
                         }
-                        for (columnName, columnData) in dfT.iteritems():
-                            for T in ["Min","Max"] :
+                        for columnName, columnData in dfT.items():
+                            for T in ["Min", "Max"]:
                                 if "H" in columnName:
                                     nH = int(columnName.split("H", 1)[1])
 
@@ -494,37 +499,66 @@ def main():
                                         Tname = f"{prefix}{T}TH_H{nH}H{nH+1}[K]"
 
                                     if Tname in table_final.columns:
-                                        table_final[Tname] = T_method[T](table_final[Tname].iloc[-1],dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName])
+                                        table_final[Tname] = T_method[T](
+                                            table_final[Tname].iloc[-1],
+                                            dfT.loc[
+                                                f'{T}TH_I={dict_df[target]["target"]}A'
+                                            ][columnName],
+                                        )
                                     else:
-                                        table_final[Tname] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
+                                        table_final[Tname] = dfT.loc[
+                                            f'{T}TH_I={dict_df[target]["target"]}A'
+                                        ][columnName]
 
-                                elif not re.search(r"_?R\d+",columnName) :
+                                elif not re.search(r"_?R\d+", columnName):
                                     table_final[
                                         f"{prefix}{T}TH_{columnName}[K]"
-                                    ] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
-                            
+                                    ] = dfT.loc[
+                                        f'{T}TH_I={dict_df[target]["target"]}A'
+                                    ][
+                                        columnName
+                                    ]
+
                             if "H" in columnName:
                                 nH = int(columnName.split("H", 1)[1])
 
                                 Tname = f"{prefix}MeanTH_H{nH-1}H{nH}[K]"
                                 if nH % 2:
                                     Tname = f"{prefix}MeanTH_H{nH}H{nH+1}[K]"
-                                    Area=parameters[f"Area_{prefix}H{nH}"] + parameters[f"Area_{prefix}H{nH+1}"]
-                                else :
-                                    Area=parameters[f"Area_{prefix}H{nH-1}"] + parameters[f"Area_{prefix}H{nH-1}"]
+                                    Area = (
+                                        parameters[f"Area_{prefix}H{nH}"]
+                                        + parameters[f"Area_{prefix}H{nH+1}"]
+                                    )
+                                else:
+                                    Area = (
+                                        parameters[f"Area_{prefix}H{nH-1}"]
+                                        + parameters[f"Area_{prefix}H{nH-1}"]
+                                    )
 
                                 if Tname in table_final.columns:
-                                    table_final[Tname] = (table_final[Tname].iloc[-1] + dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]*parameters[f"Area_{prefix}H{nH}"])/Area
+                                    table_final[Tname] = (
+                                        table_final[Tname].iloc[-1]
+                                        + dfT.loc[
+                                            f'MeanTH_I={dict_df[target]["target"]}A'
+                                        ][columnName]
+                                        * parameters[f"Area_{prefix}H{nH}"]
+                                    ) / Area
                                 else:
-                                    table_final[Tname] = dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]*parameters[f"Area_{prefix}H{nH}"]
-                            
-                            elif not re.search(r"_?R\d+",columnName) :
+                                    table_final[Tname] = (
+                                        dfT.loc[
+                                            f'MeanTH_I={dict_df[target]["target"]}A'
+                                        ][columnName]
+                                        * parameters[f"Area_{prefix}H{nH}"]
+                                    )
+
+                            elif not re.search(r"_?R\d+", columnName):
                                 table_final[
                                     f"{prefix}MeanTH_{columnName}[K]"
-                                ] = dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]
+                                ] = dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][
+                                    columnName
+                                ]
 
-
-            for columnName, columnData in table_final.iteritems():
+            for columnName, columnData in table_final.items():
                 if columnName.startswith(f"{prefix}Ucoil"):
                     table_final[
                         columnName.replace("Ucoil", "R(I)").replace("[V]", "[ohm]")
