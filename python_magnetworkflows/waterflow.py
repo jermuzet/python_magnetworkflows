@@ -30,8 +30,8 @@ class waterflow:
 
     # Flow params
     @classmethod
-    def flow_params(cls, filename: str):
-        with open(filename, "r") as f:
+    def flow_params(cls, pwd: str, filename: str):
+        with open(f"{pwd}/{filename}", "r") as f:
             flow_params = json.loads(f.read())
 
         Vpump0 = flow_params["Vp0"]["value"]  # rpm
@@ -45,7 +45,9 @@ class waterflow:
             BP = flow_params["BP"]["value"]  # bar
         Imax = flow_params["Imax"]["value"]  # Amperes
 
-        return cls(Vpump0, Vpmax, F0_l_per_second, Fmax_l_per_second, Pmax, Pmin, BP, Imax)
+        return cls(
+            Vpump0, Vpmax, F0_l_per_second, Fmax_l_per_second, Pmax, Pmin, BP, Imax
+        )
 
     def vpump(self, objectif: float) -> float:
         Vpump = self.Vpmax + self.Vpump0
@@ -74,9 +76,9 @@ class waterflow:
         """
         compute pressure in bar
         """
-        
+
         # print(f'pressure: P(I={objectif})={self.pressure(objectif)}, P0={self.Pmin}, Pmax={self.Pmax}')
-        
+
         if objectif <= self.Imax:
             return (
                 self.Pmin
@@ -88,7 +90,7 @@ class waterflow:
         """
         compute dpressure in bar ???
         """
-        #print(f'dpressure: P(I={objectif})={self.pressure(objectif)}, BP={self.BP}')
+        # print(f'dpressure: P(I={objectif})={self.pressure(objectif)}, BP={self.BP}')
         return self.pressure(objectif) - self.BP
 
     def umean(self, objectif: float, section: float) -> float:
