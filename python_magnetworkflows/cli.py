@@ -121,8 +121,6 @@ def main():
     with open(jsonmodel, "r") as jsonfile:
         dict_json = json.loads(jsonfile.read())
         parameters = dict_json["Parameters"]
-        # equations = dict_json["Models"]["cfpdes"]["equations"]
-        robinbound = dict_json["BoundaryConditions"]["heat"]["Robin"]
 
     targets = {}
     postvalues = {}
