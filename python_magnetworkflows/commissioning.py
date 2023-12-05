@@ -45,7 +45,7 @@ def main():
         "--cooling",
         help="choose cooling type",
         type=str,
-        choices=["mean", "grad", "meanH", "gradH","gradHZ"],
+        choices=["mean", "grad", "meanH", "gradH", "gradHZ"],
         default="mean",
     )
     parser.add_argument(
@@ -71,12 +71,6 @@ def main():
     parser.add_argument(
         "--itermax",
         help="specify maximum iteration (default: 10)",
-        type=int,
-        default=10,
-    )
-    parser.add_argument(
-        "--stepmax",
-        help="specify maximum step number (default: 10)",
         type=int,
         default=10,
     )
@@ -130,12 +124,14 @@ def main():
     targets = {}
     postvalues = {}
 
+    Tinit = ""
     # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
     if args.mdata:
         for mname, values in args.mdata.items():
             if rank == 0:
                 print(f"mname={mname}, values={values}")
             filter = values["filter"]
+            Tinit += f'_{filter}Tinit={parameters[f"{filter}Tinit"]}K'
             if values["type"] == "helix":
                 # change rematch, params, control_params
                 PowerM = {
@@ -415,7 +411,7 @@ def main():
     """
     Commissioning = True
     e = None
-    commissioning_df=pd.DataFrame()
+    commissioning_df = pd.DataFrame()
 
     global_df = {}
     I = []
@@ -431,11 +427,11 @@ def main():
             "statsTH": pd.DataFrame(),
         }
         I.append(values["value"])
-    global_df["MSite"] = {"U":pd.DataFrame()}
 
-    nstep=0
+    global_df["MSite"] = {"U": pd.DataFrame()}
+
+    nstep = 0
     while Commissioning:
-
         if rank == 0:
             print("\n\nONECONFIG START")
 
@@ -455,20 +451,22 @@ def main():
             os.makedirs(outdir, exist_ok=True)
             table.to_csv(f"{outdir}/values.csv", index=False)
 
-            table=table.iloc[-1:].drop(['it'], axis=1)
-            table["I"]=f"I={I}A"
-            table.set_index("I",inplace=True)
-            global_df["MSite"]["U"] = pd.concat([global_df["MSite"]["U"], table.iloc[-1:]])
+            table = table.iloc[-1:].drop(["it"], axis=1)
+            table["I"] = f"I={I}A"
+            table.set_index("I", inplace=True)
+            global_df["MSite"]["U"] = pd.concat(
+                [global_df["MSite"]["U"], table.iloc[-1:]]
+            )
 
             table_final = pd.DataFrame([f"{I}"], columns=["measures"])
 
             for target, values in dict_df.items():
                 mname = target[:-2]
-                prefix=""
-                if mname :
-                    prefix=f"{mname}_"
-                    
-                table_final[f"{prefix}I"] = dict_df[target]["target"]
+                prefix = ""
+                if mname:
+                    prefix = f"{mname}_"
+
+                table_final[f"{prefix}I[A]"] = dict_df[target]["target"]
                 table_final[f"{prefix}flow[l/s]"] = dict_df[target]["flow"] * 1e3
                 table_final[f"{prefix}Tout[K]"] = dict_df[target]["Tout"]
                 print("\n")
@@ -479,7 +477,7 @@ def main():
                             table_final[f"{prefix}PowerM[MW]"] = df.T.iloc[0, 0] * 1e-6
                         elif key == "PowerH":
                             dfUcoil = df / dict_df[target]["target"]
-                            for (columnName, columnData) in dfUcoil.iteritems():
+                            for columnName, columnData in dfUcoil.iteritems():
                                 if "H" in columnName:
                                     nH = int(columnName.split("H", 1)[1])
 
@@ -507,8 +505,8 @@ def main():
                                 "Min": min,
                                 "Max": max,
                             }
-                            for (columnName, columnData) in dfT.iteritems():
-                                for T in ["Min","Max"] :
+                            for columnName, columnData in dfT.iteritems():
+                                for T in ["Min", "Max"]:
                                     if "H" in columnName:
                                         nH = int(columnName.split("H", 1)[1])
 
@@ -517,66 +515,100 @@ def main():
                                             Tname = f"{prefix}{T}TH_H{nH}H{nH+1}[K]"
 
                                         if Tname in table_final.columns:
-                                            table_final[Tname] = T_method[T](table_final[Tname].iloc[-1],dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName])
+                                            table_final[Tname] = T_method[T](
+                                                table_final[Tname].iloc[-1],
+                                                dfT.loc[
+                                                    f'{T}TH_I={dict_df[target]["target"]}A'
+                                                ][columnName],
+                                            )
                                         else:
-                                            table_final[Tname] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
+                                            table_final[Tname] = dfT.loc[
+                                                f'{T}TH_I={dict_df[target]["target"]}A'
+                                            ][columnName]
 
-                                    elif not re.search(r"_?R\d+",columnName) :
+                                    elif not re.search(r"_?R\d+", columnName):
                                         table_final[
                                             f"{prefix}{T}TH_{columnName}[K]"
-                                        ] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
-                                        
+                                        ] = dfT.loc[
+                                            f'{T}TH_I={dict_df[target]["target"]}A'
+                                        ][
+                                            columnName
+                                        ]
+
                                 if "H" in columnName:
                                     nH = int(columnName.split("H", 1)[1])
 
                                     Tname = f"{prefix}MeanTH_H{nH-1}H{nH}[K]"
                                     if nH % 2:
                                         Tname = f"{prefix}MeanTH_H{nH}H{nH+1}[K]"
-                                        Area=parameters[f"Area_{prefix}H{nH}"] + parameters[f"Area_{prefix}H{nH+1}"]
-                                    else :
-                                        Area=parameters[f"Area_{prefix}H{nH-1}"] + parameters[f"Area_{prefix}H{nH-1}"]
+                                        Area = (
+                                            parameters[f"Area_{prefix}H{nH}"]
+                                            + parameters[f"Area_{prefix}H{nH+1}"]
+                                        )
+                                    else:
+                                        Area = (
+                                            parameters[f"Area_{prefix}H{nH-1}"]
+                                            + parameters[f"Area_{prefix}H{nH}"]
+                                        )
 
                                     if Tname in table_final.columns:
-                                        table_final[Tname] = (table_final[Tname].iloc[-1] + dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]*parameters[f"Area_{prefix}H{nH}"])/Area
+                                        table_final[Tname] = (
+                                            table_final[Tname].iloc[-1]
+                                            + dfT.loc[
+                                                f'MeanTH_I={dict_df[target]["target"]}A'
+                                            ][columnName]
+                                            * parameters[f"Area_{prefix}H{nH}"]
+                                        ) / Area
                                     else:
-                                        table_final[Tname] = dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]*parameters[f"Area_{prefix}H{nH}"]
-                                
-                                elif not re.search(r"_?R\d+",columnName) :
+                                        table_final[Tname] = (
+                                            dfT.loc[
+                                                f'MeanTH_I={dict_df[target]["target"]}A'
+                                            ][columnName]
+                                            * parameters[f"Area_{prefix}H{nH}"]
+                                        )
+
+                                elif not re.search(r"_?R\d+", columnName):
                                     table_final[
                                         f"{prefix}MeanTH_{columnName}[K]"
-                                    ] = dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]
+                                    ] = dfT.loc[
+                                        f'MeanTH_I={dict_df[target]["target"]}A'
+                                    ][
+                                        columnName
+                                    ]
 
-                for (columnName, columnData) in table_final.iteritems():
-                    if columnName.startswith(f"{prefix}Ucoil") :
-                        table_final[columnName.replace("Ucoil","R(I)").replace("[V]","[ohm]")] = columnData/ dict_df[target]["target"]
+                for columnName, columnData in table_final.iteritems():
+                    if columnName.startswith(f"{prefix}Ucoil"):
+                        table_final[
+                            columnName.replace("Ucoil", "R(I)").replace("[V]", "[ohm]")
+                        ] = (columnData / dict_df[target]["target"])
 
             if "mag" in args.cfgfile:
                 df = pd.read_csv("magnetic.measures/values.csv")
                 table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
-                
+
             print("ONECONFIG DONE")
 
-        table_final.set_index("measures", inplace=True)
-        table_final.T.to_csv(f"measures{I}.csv", index=True)
+            table_final = table_final.set_index("measures")
+            table_final = table_final.round(3)
+            table_final.T.to_csv(f"measures{I}.csv", index=True, header=False)
 
-        print(table_final.T)
+            print(table_final.reset_index().T.drop("measures"))
 
-        if commissioning_df.empty :
-            commissioning_df = table_final.copy()
-        else :
-            commissioning_df = pd.concat([commissioning_df,table_final])
+            if commissioning_df.empty:
+                commissioning_df = table_final.copy()
+            else:
+                commissioning_df = pd.concat([commissioning_df, table_final])
 
-        nstep+=1
+        nstep += 1
         i = 0
         for mname, values in args.mdata.items():
             filter = values["filter"]
             targets[f"{filter}I"]["objectif"] -= values["step"]
             I[i] = targets[f"{filter}I"]["objectif"]
-            if I[i] <= 0 or nstep >= args.stepmax:
+            if I[i] <= 0 or nstep >= values["stepmax"]:
                 Commissioning = False
 
             i += 1
-
 
     if rank == 0:
         for target, values in global_df.items():
@@ -591,8 +623,8 @@ def main():
                     outdir = f"{mname}_{key}.measures"
                     os.makedirs(outdir, exist_ok=True)
                     df_T.to_csv(f"{outdir}/values.csv", index=True)
-        
-        commissioning_df.to_csv(f"measures.csv", index=True)
+
+        commissioning_df.to_csv(f"measures{Tinit}.csv", index=False)
 
     return 0
 

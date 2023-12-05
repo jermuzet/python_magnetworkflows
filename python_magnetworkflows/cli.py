@@ -121,16 +121,21 @@ def main():
     with open(jsonmodel, "r") as jsonfile:
         dict_json = json.loads(jsonfile.read())
         parameters = dict_json["Parameters"]
+        # equations = dict_json["Models"]["cfpdes"]["equations"]
+        robinbound = dict_json["BoundaryConditions"]["heat"]["Robin"]
 
     targets = {}
     postvalues = {}
 
+    Tinit = ""
     # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
     if args.mdata:
         for mname, values in args.mdata.items():
             if rank == 0:
                 print(f"mname={mname}, values={values}")
             filter = values["filter"]
+            Tinit += f'_{filter}Tinit={parameters[f"{filter}Tinit"]}K'
+
             if values["type"] == "helix":
                 # change rematch, params, control_params
                 PowerM = {
@@ -257,7 +262,7 @@ def main():
                     "unit": "A",
                     "name": f"Intensity_{filter}",
                     "post": {"type": "Statistics_Intensity", "math": "integrate"},
-                    "waterflow": waterflow.flow_params(values["flow"]),
+                    "waterflow": waterflow.flow_params(pwd, values["flow"]),
                 }
 
             if values["type"] == "bitter":
@@ -386,7 +391,7 @@ def main():
                     "unit": "A",
                     "name": f"Intensity{filter}",
                     "post": {"type": "Statistics_Intensity", "math": "integrate"},
-                    "waterflow": waterflow.flow_params(values["flow"]),
+                    "waterflow": waterflow.flow_params(pwd, values["flow"]),
                 }
 
             postvalues[f"{filter}I"] = {
@@ -429,14 +434,14 @@ def main():
 
         for target, values in dict_df.items():
             mname = target[:-2]
-            prefix=""
-            if mname :
-                prefix=f"{mname}_"
-                
-            table_final[f"{prefix}I"] = dict_df[target]["target"]
+            prefix = ""
+            if mname:
+                prefix = f"{mname}_"
+
+            table_final[f"{prefix}I[A]"] = dict_df[target]["target"]
             table_final[f"{prefix}flow[l/s]"] = dict_df[target]["flow"] * 1e3
             table_final[f"{prefix}Tout[K]"] = dict_df[target]["Tout"]
-            
+
             print("\n")
             for key, df in values.items():
                 if key in ["DT", "HeatCoeff"]:
@@ -474,7 +479,7 @@ def main():
                 if key in ["statsT", "statsTH"]:
                     list_dfT = [dfT for keyT, dfT in df.items()]
                     dfT = pd.concat(list_dfT, sort=True)
-                    dfT_T=dfT.T
+                    dfT_T = dfT.T
                     outdir = f"{prefix}{key}.measures"
                     os.makedirs(outdir, exist_ok=True)
                     dfT_T.to_csv(f"{outdir}/values.csv", index=True)
@@ -484,8 +489,8 @@ def main():
                             "Min": min,
                             "Max": max,
                         }
-                        for (columnName, columnData) in dfT.iteritems():
-                            for T in ["Min","Max"] :
+                        for columnName, columnData in dfT.iteritems():
+                            for T in ["Min", "Max"]:
                                 if "H" in columnName:
                                     nH = int(columnName.split("H", 1)[1])
 
@@ -494,35 +499,64 @@ def main():
                                         Tname = f"{prefix}{T}TH_H{nH}H{nH+1}[K]"
 
                                     if Tname in table_final.columns:
-                                        table_final[Tname] = T_method[T](table_final[Tname].iloc[-1],dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName])
+                                        table_final[Tname] = T_method[T](
+                                            table_final[Tname].iloc[-1],
+                                            dfT.loc[
+                                                f'{T}TH_I={dict_df[target]["target"]}A'
+                                            ][columnName],
+                                        )
                                     else:
-                                        table_final[Tname] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
+                                        table_final[Tname] = dfT.loc[
+                                            f'{T}TH_I={dict_df[target]["target"]}A'
+                                        ][columnName]
 
-                                elif not re.search(r"_?R\d+",columnName) :
+                                elif not re.search(r"_?R\d+", columnName):
                                     table_final[
                                         f"{prefix}{T}TH_{columnName}[K]"
-                                    ] = dfT.loc[f'{T}TH_I={dict_df[target]["target"]}A'][columnName]
-                            
+                                    ] = dfT.loc[
+                                        f'{T}TH_I={dict_df[target]["target"]}A'
+                                    ][
+                                        columnName
+                                    ]
+
                             if "H" in columnName:
                                 nH = int(columnName.split("H", 1)[1])
 
                                 Tname = f"{prefix}MeanTH_H{nH-1}H{nH}[K]"
                                 if nH % 2:
                                     Tname = f"{prefix}MeanTH_H{nH}H{nH+1}[K]"
-                                    Area=parameters[f"Area_{prefix}H{nH}"] + parameters[f"Area_{prefix}H{nH+1}"]
-                                else :
-                                    Area=parameters[f"Area_{prefix}H{nH-1}"] + parameters[f"Area_{prefix}H{nH-1}"]
+                                    Area = (
+                                        parameters[f"Area_{prefix}H{nH}"]
+                                        + parameters[f"Area_{prefix}H{nH+1}"]
+                                    )
+                                else:
+                                    Area = (
+                                        parameters[f"Area_{prefix}H{nH-1}"]
+                                        + parameters[f"Area_{prefix}H{nH}"]
+                                    )
 
                                 if Tname in table_final.columns:
-                                    table_final[Tname] = (table_final[Tname].iloc[-1] + dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]*parameters[f"Area_{prefix}H{nH}"])/Area
+                                    table_final[Tname] = (
+                                        table_final[Tname].iloc[-1]
+                                        + dfT.loc[
+                                            f'MeanTH_I={dict_df[target]["target"]}A'
+                                        ][columnName]
+                                        * parameters[f"Area_{prefix}H{nH}"]
+                                    ) / Area
                                 else:
-                                    table_final[Tname] = dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]*parameters[f"Area_{prefix}H{nH}"]
-                            
-                            elif not re.search(r"_?R\d+",columnName) :
+                                    table_final[Tname] = (
+                                        dfT.loc[
+                                            f'MeanTH_I={dict_df[target]["target"]}A'
+                                        ][columnName]
+                                        * parameters[f"Area_{prefix}H{nH}"]
+                                    )
+
+                            elif not re.search(r"_?R\d+", columnName):
                                 table_final[
                                     f"{prefix}MeanTH_{columnName}[K]"
-                                ] = dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][columnName]
-
+                                ] = dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][
+                                    columnName
+                                ]
 
             for columnName, columnData in table_final.iteritems():
                 if columnName.startswith(f"{prefix}Ucoil"):
@@ -538,10 +572,11 @@ def main():
             df = pd.read_csv("magnetic.measures/values.csv")
             table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
 
-        table_final.set_index("measures", inplace=True)
-        table_final.T.to_csv(f"measures.csv", index=True)
+        table_final = table_final.T.drop("measures")
+        table_final = table_final.round(3)
+        table_final.to_csv(f"measures{Tinit}.csv", index=True, header=False)
 
-        print(table_final.T)
+        print(table_final)
 
     return 0
 
