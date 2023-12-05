@@ -398,7 +398,7 @@ def solve(
                 # TODO verify if data are consistant??
                 # assert len(Dh) == len(TwH) == len(dTwH) == len(hwH)
                 if e.isMasterRank() and args.debug:
-                        print(f'{target} Flux: {dict_df[target]["Flux"]}')
+                    print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
                 if not dTwH:
                     dTwH = [0] * len(Dh)
@@ -426,9 +426,13 @@ def solve(
                         # print(f"cwd={os.getcwd()}, csvfile={csvfile}")
                         if e.isMasterRank():
                             Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
-                        else :
+                        else:
                             Tw_data = None
-                        Tw_data = fpp.Environment.worldComm().localComm().bcast(Tw_data, root=0)
+                        Tw_data = (
+                            fpp.Environment.worldComm()
+                            .localComm()
+                            .bcast(Tw_data, root=0)
+                        )
                         _old = Tw_data["Tw"].to_list()
                         _new = None
                         dTwH[i] = _old[-1] - _old[0]
@@ -482,23 +486,23 @@ def solve(
                                 friction=args.friction,
                             )
 
-                            if args.heatcorrelation != "Montgomery":
-                                tmp_U = Uw(
-                                    _new[0] + dTwi[-1] / 2.0,
-                                    Pressure,
-                                    dPressure,
-                                    d,
-                                    Lh[i],
-                                    friction=args.friction,
-                                    uguess=U,
-                                )
-                                n_tmp_flow = tmp_U * s
-                                U = tmp_U
+                            # if args.heatcorrelation != "Montgomery":
+                            tmp_U = Uw(
+                                _new[0] + dTwi[-1] / 2.0,
+                                Pressure,
+                                dPressure,
+                                d,
+                                Lh[i],
+                                friction=args.friction,
+                                uguess=U,
+                            )
+                            n_tmp_flow = tmp_U * s
+                            U = tmp_U
 
-                                if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
-                                    break
-                            else:
+                            if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
                                 break
+                            # else:
+                            #     break
 
                             _old = copy.deepcopy(_new)
 
@@ -508,7 +512,7 @@ def solve(
                         # save back to csv: T_z.to_csv(f"Tw_{cname}.csv", index=False)
                         Tw_data["Tw"] = _new
                         # print(f'save _new={_new} to {csvfile}')
-                        if e.isMasterRank :
+                        if e.isMasterRank:
                             Tw_data.to_csv(f"{csvfile}", index=False)
 
                         # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
@@ -528,6 +532,7 @@ def solve(
                             print(
                                 f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d}, Sh={s}, Power={PowerCh:.3f}, TwH={Tw0:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}"
                             )
+                        dict_df[target]["Uw"]["Uw_" + cname] = [round(U, 3)]
 
                         Ti[i] = Tw0 + dTwi[i]
                         VolMass[i] = rho(Tw0 + dTwi[i] / 2.0, Pressure)
@@ -586,23 +591,23 @@ def solve(
                                 friction=args.friction,
                             )
 
-                            if args.heatcorrelation != "Montgomery":
-                                tmp_U = Uw(
-                                    TwH[i] + tmp_dTwi / 2.0,
-                                    Pressure,
-                                    dPressure,
-                                    d,
-                                    Lh[i],
-                                    friction=args.friction,
-                                    uguess=U,
-                                )
-                                n_tmp_flow = tmp_U * s
-                                U = tmp_U
+                            # if args.heatcorrelation != "Montgomery":
+                            tmp_U = Uw(
+                                TwH[i] + tmp_dTwi / 2.0,
+                                Pressure,
+                                dPressure,
+                                d,
+                                Lh[i],
+                                friction=args.friction,
+                                uguess=U,
+                            )
+                            n_tmp_flow = tmp_U * s
+                            U = tmp_U
 
-                                if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
-                                    break
-                            else:
+                            if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
                                 break
+                            # else:
+                            #     break
 
                         Q[i] = tmp_flow
                         dTwi[i] = (1.0 - relax) * tmp_dTwi + relax * dTwH[i]
@@ -623,6 +628,7 @@ def solve(
                             print(
                                 f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d}, Sh={s}, Power={PowerCh:.3f}, TwH={TwH[i]:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}"
                             )
+                        dict_df[target]["Uw"]["Uw_" + cname] = [round(U, 3)]
 
                         VolMass[i] = rho(TwH[i] + dTwi[i] / 2.0, Pressure)
                         SpecHeat[i] = Cp(TwH[i] + dTwi[i] / 2.0, Pressure)
@@ -686,6 +692,9 @@ def solve(
 
                     dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [hg]
                     dict_df[target]["DT"][p_params["dTw"][i]] = [dTg]
+                    dict_df[target]["Uw"][p_params["dTw"][i].replace("dTw", "Uw")] = [
+                        round(Umean, 3)
+                    ]
 
                 if args.debug and e.isMasterRank():
                     print(

@@ -71,6 +71,7 @@ def oneconfig(
             "target": values["objectif"],
             "flow": 0,
             "Tout": 0,
+            "Uw": pd.DataFrame(),
         }
 
     # capture actual params per target:
@@ -101,7 +102,7 @@ def oneconfig(
         for key, df in values.items():
             if isinstance(df, pd.DataFrame):
                 if rank == 0:
-                    print(f"\t{key}:")
+                    print(f"\n\t{key}:")
                 df["I"] = f'I={dict_df[target]["target"]}A'
                 df.set_index("I", inplace=True)
                 if rank == 0:
@@ -240,4 +241,3 @@ def oneconfig(
         """
 
     return (table, dict_df, e)
-
