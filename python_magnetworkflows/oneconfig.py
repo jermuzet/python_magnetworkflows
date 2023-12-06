@@ -4,13 +4,7 @@ Run feelpp model for one config
 from typing import List
 
 import os
-from math import fabs
-
-import json
-
-import re
 import pandas as pd
-from tabulate import tabulate
 
 from .params import getparam
 from .solver import solve
@@ -22,6 +16,7 @@ def oneconfig(
     fname: str,
     e,
     f,
+    fields,
     feelpp_directory: str,
     jsonmodel: str,
     meshmodel: str,
@@ -37,7 +32,7 @@ def oneconfig(
      jsonmodel:
      meshmodel:
      targets: dict of target (name: objectif , csv, ...)
-     postvalues:
+     postvalues: dict for postprocessing quantities
      parameters: all jsonmodel parameters
 
     returns a tuple:
@@ -98,6 +93,7 @@ def oneconfig(
         fname,
         e,
         f,
+        fields,
         feelpp_directory,
         jsonmodel,
         meshmodel,
@@ -108,6 +104,10 @@ def oneconfig(
         parameters,
         dict_df,
     )
+
+    if e.isMasterRank():
+        print("solve done")
+
     for target, values in dict_df.items():
         if args.debug and e.isMasterRank():
             print(f"\n\nresult for {target}:", flush=True)
@@ -125,4 +125,7 @@ def oneconfig(
                     dfT["I"] = f'{keyT}_I={dict_df[target]["target"]}A'
                     dfT.set_index("I", inplace=True)
 
+    if e.isMasterRank():
+        print("end of oneconfig")
+    e.worldComm().barrier()
     return (table, dict_df, e)
