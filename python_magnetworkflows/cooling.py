@@ -1,10 +1,21 @@
 """
 Cooling Models
 """
-
+from typing import List
 from math import exp, log, log10, sqrt
 
-import freesteam
+from iapws import IAPWS97
+
+
+def steam(Tw: float, P: float):
+    """
+    return steam object
+
+    Tw: Temperature in Kelvin
+    P: Pressure in Bar
+    """
+    Mpa = 0.1 * P
+    return IAPWS97(P=Mpa, T=Tw)
 
 
 def rho(Tw: float, P: float) -> float:
@@ -14,21 +25,23 @@ def rho(Tw: float, P: float) -> float:
     Tw: Temperature in Kelvin
     P: Pressure in Bar
     """
-    Steam = freesteam.steam_pT(P * 1.0e5, Tw)
-    # print(f'rho({P} bar, {Tw} K)={Steam.rho}')
+    Mpa = 0.1 * P
+    Steam = IAPWS97(P=Mpa, T=Tw)
+    # print(f"rho({Mpa} MPa, {Tw} K)={Steam.rho}")
     return Steam.rho
 
 
 def Cp(Tw: float, P: float) -> float:
     """
-    compute water specific heat in ???
+    compute water specific heat in ???kJ/kg·K
 
     Tw: Temperature in Kelvin
     P: Pressure in Bar
     """
-    Steam = freesteam.steam_pT(P * 1.0e5, Tw)
-    # print(f'Cp({P} bar, {Tw} K)={Steam.cp}')
-    return Steam.cp
+    Mpa = 0.1 * P
+    Steam = IAPWS97(P=Mpa, T=Tw)
+    # print(f"Cp({Mpa} MPa, {Tw} K)={Steam.cp} kJ/kg·K")
+    return Steam.cp * 1.0e3  # watch out units
 
 
 def viscosity(Tw: float, P: float) -> float:
@@ -38,8 +51,9 @@ def viscosity(Tw: float, P: float) -> float:
     Tw: Temperature in Kelvin
     P: Pressure in Bar
     """
-    Steam = freesteam.steam_pT(P * 1.0e5, Tw)
-    # print(f'mu({P} bar, {Tw} K)={Steam.mu}')
+    Mpa = 0.1 * P
+    Steam = IAPWS97(P=Mpa, T=Tw)
+    # print(f"mu({Mpa} MPa, {Tw} K)={Steam.mu}")
     return Steam.mu
 
 
@@ -50,8 +64,9 @@ def k(Tw: float, P: float) -> float:
     Tw: Temperature in Kelvin
     P: Pressure in Bar
     """
-    Steam = freesteam.steam_pT(P * 1.0e5, Tw)
-    # print(f'k({P} bar, {Tw} K)={Steam.k}')
+    Mpa = 0.1 * P
+    Steam = IAPWS97(P=Mpa, T=Tw)
+    # print(f"k({Mpa} MPa, {Tw} K)={Steam.k}")
     return Steam.k
 
 
@@ -103,6 +118,7 @@ def Constant(Re: float, Dh: float, f: float, rugosity: float) -> float:
     # print(f"Constant={cf}")
     return cf
 
+
 """
 To be implemented
 
@@ -127,6 +143,7 @@ friction == "karman":
         # # print ("%s Cf=%g" % (friction,Cf) )
 """
 
+
 def Blasius(Re: float, Dh: float, f: float, rugosity: float) -> float:
     cf = 0.316 / exp(log(Re) * 0.25)
     # print(f"Blasius={cf}")
@@ -141,7 +158,7 @@ def Filonenko(Re: float, Dh: float, f: float, rugosity: float) -> float:
 
 def Colebrook(Re: float, Dh: float, f: float, rugosity: float) -> float:
     val = 1 / sqrt(f)
-    isOK= False
+    isOK = False
     it = 0
     max_err = 1.0e-3
     while it < 10:
@@ -149,14 +166,14 @@ def Colebrook(Re: float, Dh: float, f: float, rugosity: float) -> float:
         error = abs(1 - nval / val)
         val = nval
         # print(f"Colebrook: val={val}, error={error}, it={it}")
-        
+
         it += 1
         if error <= max_err:
             isOk = True
             break
 
     if isOk != True:
-        raise RuntimeError(f'ColeBrook: cf failed to converge')    
+        raise RuntimeError(f"ColeBrook: cf failed to converge")
     cf = 1 / val**2
     # print(f"Colebrook={cf}, it={it}")
     return cf
@@ -180,7 +197,7 @@ def Swanee(Re: float, Dh: float, f: float, rugosity: float) -> float:
             break
 
     if isOK != True:
-        raise RuntimeError(f'Swanee: cf failed to converge')    
+        raise RuntimeError(f"Swanee: cf failed to converge")
     cf = val
     # print(f"Swanee={cf}, it={it}")
     return cf
@@ -221,23 +238,25 @@ def Uw(
     while it < 10:
         Re = Reynolds(Tw, Pw, U, Dh, L)
         nf = friction_method[friction](Re, Dh, f, rugosity)
-        
-        dPw_Pascal = dPw * 1.e+5
-        nU = sqrt(2 * dPw_Pascal / (rho(Tw, Pw) * (Pextra + nf * L / Dh))) # Faux!!!
+
+        dPw_Pascal = dPw * 1.0e5
+        nU = sqrt(2 * dPw_Pascal / (rho(Tw, Pw) * (Pextra + nf * L / Dh)))  # Faux!!!
         error_U = abs(1 - nU / U)
         error_f = abs(1 - nf / f)
+        # print(
+        #     f"Uw: U={U:.3f}, nU={nU:.3f}, f={f}, nf={nf}, Re(Tw={Tw:.3f}, Pw={Pw:.3f}, U={U:.3f}, Dh={Dh:.3e}, L={L:.3e})={Re:.3f}, dPw={dPw:.3f}, Pextra={Pextra:.3f}, error_U={error_U}, error_f={error_f}, it={it}"
+        # )
         U = nU
         f = nf
-        # print(f'Uw: nU={nU}, nf={nf}, Re={Re}=Re(Tw={Tw}, Pw={Pw}, U={U}, Dh={Dh}, L={L}), dPw={dPw}, Pextra={Pextra}, error_U={error_U}, error_f={error_f}, it={it}')
 
         it += 1
         if error_U <= max_err_U and error_f <= max_err_f:
             isOk = True
             break
 
-    print(f"Uw={U}, Cf={f} ({friction}), rugodity={rugosity}, Re={Re}")
+    print(f"Uw={U:.3f}, Cf={f:.3e} ({friction}), rugosity={rugosity:.3e}, Re={Re:.3f}")
     if isOk != True:
-        raise RuntimeError(f'Uw: max it reached')
+        raise RuntimeError(f"Uw: max it reached")
     return U
 
 
@@ -272,7 +291,7 @@ def hcorrelation(
     L: float,
     friction: str = "Constant",
     model: str = "Montgomery",
-    rugosity: float = 0.012e-3
+    rugosity: float = 0.012e-3,
 ) -> float:
     """
     compute heat exchange coeff in W/m²/K
@@ -289,7 +308,18 @@ def hcorrelation(
     """
 
     (alpha, n, m) = params
-    nU = Uw(Tw, Pw, dPw, Dh, L, friction, Pextra=1, fguess=0.055, uguess=U, rugosity=rugosity)
+    nU = Uw(
+        Tw,
+        Pw,
+        dPw,
+        Dh,
+        L,
+        friction,
+        Pextra=1,
+        fguess=0.055,
+        uguess=U,
+        rugosity=rugosity,
+    )
 
     Re = Reynolds(Tw, Pw, nU, Dh, L)
     Pr = Prandlt(Tw, Pw)
@@ -297,3 +327,52 @@ def hcorrelation(
     h = alpha * exp(log(Re) * n) * exp(log(Pr) * m) / Dh
     print(f"hcorrelation({model}): friction={friction}, h={h}, Pr={Pr}, Re={Re}")
     return h
+
+
+def getDT(
+    flow: float, Power: float, Tw: float, dTw: float, P: float, relax: float = 0.0
+) -> float:
+    # compute dT as Power / rho *Cp * Flow(I)
+    DT = Power / (rho(Tw, P) * Cp(Tw, P) * flow)
+    # print(
+    #     f"getDT: DT={DT}, rho={rho(Tw, P)}, cp={Cp(Tw, P)}, flow={flow}, Power={Power}, Tw={Tw}, P={P}"
+    # )
+    return (1 - relax) * DT + relax * dTw
+
+
+def getHeatCoeff(
+    Dh: float,
+    L: float,
+    U: float,
+    Tw: float,
+    hw: float,
+    Pw: float,
+    dPw: float,
+    model: str = "Montgomery",
+    friction: str = "Constant",
+    relax: float = 0.0,
+):
+    correlation = {
+        "Montgomery": Montgomery,
+        "Dittus": Dittus,
+        "Colburn": Colburn,
+        "Silverberg": Silverberg,
+    }
+
+    h = correlation[model](Tw, Pw, dPw, U, Dh, L, friction)
+    return (1 - relax) * h + relax * hw
+
+
+def getTout(
+    T: List[float], VolMass: List[float], SpecHeat: List[float], Q: List[float]
+) -> float:
+    Tout = 0
+    rhoCpQ = 0
+    # print(f"Sum(Qi)={sum(Q)}")
+    for i, (Ti, RHOi, CPi, Qi) in enumerate(zip(T, VolMass, SpecHeat, Q)):
+        # print(f"i:{i}, (Ti:{Ti}, RHOi:{RHOi}, CPi:{CPi}, Qi:{Qi})")
+        Tout += Ti * RHOi * CPi * Qi
+        rhoCpQ += RHOi * CPi * Qi
+
+    Tout /= rhoCpQ
+    return Tout
