@@ -1,5 +1,5 @@
 # FROM ghcr.io/feelpp/feelpp:v0.110.2-focal
-FROM ghcr.io/feelpp/feelpp:v0.111.0-alpha.4-bullseye
+FROM ghcr.io/feelpp/feelpp:v0.111.0-preview.7-bullseye
 
 USER root
 
@@ -34,11 +34,11 @@ RUN apt update \
     && apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \
     # \
     # Verify git, process tools, lsb-release (useful for CLI installs) installed\
-    && apt-get -y install git iproute2 procps lsb-release \
+    && apt-get -y install git iproute2 procps lsb-release iputils-ping nmap \
     #\
     # Install C++ tools\
-    && apt-get -y install build-essential python3-minimal libpython3.8 \
-    && apt-get -y install python-is-python3 python3-pip python3-jinja2 \
+    && apt-get -y install build-essential python3-minimal libpython3-dev \
+    && apt-get -y install python-is-python3 python3-pip python3-venv python3-jinja2 \
     && apt-get -y install python3-autopep8 black yapf3 python3-bandit flake8 pydocstyle pylint python3-pytest mypy \
     && apt-get -y install python3-statsmodels \
     && apt-get -y install python3-matplotlib texlive-latex-base texlive-latex-extra dvipng \
@@ -50,12 +50,7 @@ RUN apt update \
     && apt-get -y install curl \
     && apt-get -y install python3-decouple python3-requests \
     # Add specific lncmi stuff \
-    && echo "deb http://euler.lncmig.local/~christophe.trophime@LNCMIG.local/debian/ $(lsb_release -cs) main" > /etc/apt/sources.list.d/lncmi.list \
-    && apt update \
-    && apt-get -y install python3-chevron \
-    && apt-get -y install python3-nptdms python3-freesteam python3-ht \
-    && apt-get -y install python3-pyclaw \
-    && apt-get -y install python3-magnettools python3-yaml \
+    && apt-get install python3-iapws \
     # [Optional] Add sudo support for the non-root user
     && apt-get install -y sudo \
     #&& if [ "$(lsb_release -cs)" = "focal" ]; then echo "Set disable_coredump false" > /etc/sudo.conf; fi \
@@ -79,3 +74,5 @@ ENV LANG=en_US.UTF-8 \
     LANGUAGE=en_US.UTF-8 \
     LC_ALL=C.UTF-8 \
     OMPI_MCA_btl_vader_single_copy_mechanism=none
+
+# install visidata in virtual env for $USERNAME
