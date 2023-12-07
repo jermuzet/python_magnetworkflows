@@ -423,8 +423,8 @@ def solve(
             for i in range(1, it):
                 for file in csvfiles:
                     _file = file.replace("$cfgdir", basedir)
-                    print(f"remove {_file}-it{it}-{post[:-1]}.csv", flush=True)
-                    os.remove(f"remove {_file}-it{it}-{post[:-1]}.csv")
+                    print(f"remove {_file}-it{i}-{post[:-1]}.csv", flush=True)
+                    os.remove(f"{_file}-it{i}-{post[:-1]}.csv")
         print("end of solve")
 
     return (table_df, dict_df, e)
