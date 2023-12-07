@@ -409,8 +409,9 @@ def compute_error(
                     # f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
                     parameters[p_params["hwH"][i]] = hi[i]
                     # parameters[p_params["dTwH"][i]] = dTwi[-1]
-                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[i]]
-                    dict_df[target]["DT"][cname] = [dTwi[i]]
+                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [round(hi[i], 3)]
+                    dict_df[target]["DT"][cname] = [round(dTwi[i], 3)]
+                    dict_df[target]["Uw"]["Uw_" + cname] = [round(U, 3)]
                     # !! export FluxZ = dict_df[target]["Flux"] with sections regrouped !!
                     # dict_df[target]["Flux"][cname] = PowerCh
 
@@ -509,8 +510,9 @@ def compute_error(
                     # f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
                     parameters[p_params["hwH"][i]] = hi[i]
                     parameters[p_params["dTwH"][i]] = dTwi[i]
-                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [hi[i]]
-                    dict_df[target]["DT"][p_params["dTwH"][i]] = [dTwi[i]]
+                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [round(hi[i], 3)]
+                    dict_df[target]["DT"][p_params["dTwH"][i]] = [round(dTwi[i], 3)]
+                    dict_df[target]["Uw"][p_params["dTwH"][i].replace("dTw", "Uw")] = [round(U, 3)]
 
                     error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
                     error_h.append(abs(1 - (hwH[i] / hi[i])))
@@ -583,8 +585,9 @@ def compute_error(
                 error_dT.append(abs(1 - (dTw[i] / dTg)))
                 error_h.append(abs(1 - (hw[i] / hg)))
 
-                dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [hg]
-                dict_df[target]["DT"][p_params["dTw"][i]] = [dTg]
+                dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [round(hg, 3)]
+                dict_df[target]["DT"][p_params["dTw"][i]] = [round(dTg, 3)]
+                dict_df[target]["Uw"][p_params["dTw"][i].replace("dTw", "Uw")] = [round(Umean, 3)]
 
             if args.debug:
                 print(
