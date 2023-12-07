@@ -76,10 +76,38 @@ def main():
         print(f"jsonmodel={jsonmodel}")
         print(f"meshmodel={meshmodel}")
 
+  
+    Commissioning = True
+    commissioning_df = pd.DataFrame()
+
+    global_df = {}
+    I = []
+    step_i = {}
+    for mname, values in args.mdata.items():
+        filter = values["filter"]
+        global_df[filter[:-1]] = {
+            "PowerM": pd.DataFrame(),
+            "PowerH": pd.DataFrame(),
+            "Flux": pd.DataFrame(),
+            "HeatCoeff": pd.DataFrame(),
+            "DT": pd.DataFrame(),
+            "statsT": pd.DataFrame(),
+            "statsTH": pd.DataFrame(),
+            "Uw": pd.DataFrame(),
+        }
+        
+        
+        if "steplist" in values:
+            step_i[mname] = 0
+            args.mdata[mname]["value"] = values["steplist"][step_i[mname]]
+            I.append(values["steplist"][step_i[mname]])
+        else:
+            I.append(values["value"])
+        
+    global_df["MSite"] = {"U": pd.DataFrame()}
+
     targets = {}
     postvalues = {}
-
-    Tinit = ""
     # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
     if args.mdata:
         targets, postvalues = loadMdata(e, pwd, args, targets, postvalues)
@@ -95,28 +123,8 @@ def main():
                 'MinHoop', 'MeanHoop', 'MaxHoop']
     
     """
-    Commissioning = True
-    commissioning_df = pd.DataFrame()
 
-    global_df = {}
-    I = []
-    for mname, values in args.mdata.items():
-        filter = values["filter"]
-        global_df[filter[:-1]] = {
-            "PowerM": pd.DataFrame(),
-            "PowerH": pd.DataFrame(),
-            "Flux": pd.DataFrame(),
-            "HeatCoeff": pd.DataFrame(),
-            "DT": pd.DataFrame(),
-            "statsT": pd.DataFrame(),
-            "statsTH": pd.DataFrame(),
-        }
-        I.append(values["value"])
-    global_df["MSite"] = {"U": pd.DataFrame()}
-
-    post = ""
-    for value in I:
-        post += f"I={value}A-"
+    
 
     nstep = 0
     while Commissioning:
@@ -133,6 +141,11 @@ def main():
             postvalues,
             parameters,
         )
+
+        post = ""
+        for value in I:
+            post += f"I={value}A-"
+
         if e.isMasterRank():
             outdir = f"U_{post[:-1]}.measures"
             os.makedirs(outdir, exist_ok=True)
@@ -164,10 +177,18 @@ def main():
             nstep += 1
             for i, (mname, values) in enumerate(args.mdata.items()):
                 filter = values["filter"]
-                targets[f"{filter}I"]["objectif"] -= values["step"]
-                I[i] = targets[f"{filter}I"]["objectif"]
-                if I[i] <= 0 or nstep >= values["stepmax"]:
-                    Commissioning = False
+                if "steplist" in values:
+                    step_i[mname] += 1
+                    if len(values["steplist"]) == step_i[mname]:
+                        Commissioning = False
+                    else:
+                        targets[f"{filter}I"]["objectif"] = values["steplist"][step_i[mname]]
+                    I[i] = targets[f"{filter}I"]["objectif"]
+                else:
+                    targets[f"{filter}I"]["objectif"] -= values["step"]
+                    I[i] = targets[f"{filter}I"]["objectif"]
+                    if I[i] <= 0 or nstep >= values["stepmax"]:
+                        Commissioning = False
 
             commissioning_df.to_csv(f"measures.csv", index=True)
 
