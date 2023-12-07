@@ -95,7 +95,8 @@ def main():
             "statsTH": pd.DataFrame(),
             "Uw": pd.DataFrame(),
         }
-        
+        if "Z" in args.cooling:
+            global_df[filter[:-1]]["FluxZ"]=pd.DataFrame()
         
         if "steplist" in values:
             step_i[mname] = 0
