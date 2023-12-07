@@ -77,6 +77,7 @@ def oneconfig(
             "target": values["objectif"],
             "flow": 0,
             "Tout": 0,
+            "Uw": pd.DataFrame(),
         }
 
     # capture actual params per target:

@@ -367,10 +367,6 @@ def exportResults(
 
         print("\n")
         for key, df in values.items():
-            if key in ["DT", "HeatCoeff"]:
-                outdir = f"{prefix}{key}.measures"
-                os.makedirs(outdir, exist_ok=True)
-                df.to_csv(f"{outdir}/values_noT.csv", index=True)
             if isinstance(df, pd.DataFrame):
                 df_T = df.T
                 outdir = f"{prefix}{key}.measures"
@@ -405,7 +401,9 @@ def exportResults(
             if key in ["statsT", "statsTH"]:
                 list_dfT = [dfT for keyT, dfT in df.items()]
                 dfT = pd.concat(list_dfT, sort=True)
-
+                if key == "statsT":
+                    dfT.drop(columns=["max", "min", "mean"], inplace=True)
+                    
                 dfT_T = dfT.T
                 outdir = f"{prefix}{key}.measures"
                 os.makedirs(outdir, exist_ok=True)
@@ -458,7 +456,7 @@ def exportResults(
                             else:
                                 Area = (
                                     parameters[f"Area_{prefix}H{nH-1}"]
-                                    + parameters[f"Area_{prefix}H{nH-1}"]
+                                    + parameters[f"Area_{prefix}H{nH}"]
                                 )
 
                             if Tname in table_final.columns:
