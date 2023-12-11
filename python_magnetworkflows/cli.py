@@ -18,7 +18,7 @@ from .oneconfig import oneconfig
 from .solver import init
 
 
-def options(description: str, epilog):
+def options(description: str, epilog: str):
     """
     define options
     """
@@ -403,7 +403,7 @@ def exportResults(
                 dfT = pd.concat(list_dfT, sort=True)
                 if key == "statsT":
                     dfT.drop(columns=["max", "min", "mean"], inplace=True)
-                    
+
                 dfT_T = dfT.T
                 outdir = f"{prefix}{key}.measures"
                 os.makedirs(outdir, exist_ok=True)
@@ -513,7 +513,7 @@ def main():
         "\n"
         "Before running you need a flow_params for each magnet\n"
     )
-    print(f"epilog: {epilog} (type={type(epilog)})")
+    # print(f"epilog: {epilog} (type={type(epilog)})", flush=True)
 
     parser = options(description, epilog)
     args = parser.parse_args()

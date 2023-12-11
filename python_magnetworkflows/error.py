@@ -32,7 +32,8 @@ def compute_error(
     parameters: all jsonmodel parameters
     dict_df:
     """
-    print(f"compute_error: it={it}")
+    if e.isMasterRank:
+        print(f"compute_error: it={it}, targets={targets},  ", flush=True)
 
     table_ = [it]
     err_max = 0
@@ -45,11 +46,15 @@ def compute_error(
     List_Qout = []
     Tw0 = None
     for target, values in targets.items():
-        objectif = -values["objectif"]
+        print(
+            f'dict_df[target]["target"]={dict_df[target]["target"]} (type={type(dict_df[target]["target"])})'
+        )
+
+        objectif = -float(values["objectif"])
         # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
         filtered_df = getTarget(targets, target, e, args.debug)
 
-        relax = values["relax"]
+        relax = float(values["relax"])
 
         # TODO: add stats for filtered_df to table_: mean, ecart type, min/max??
 
@@ -512,7 +517,9 @@ def compute_error(
                     parameters[p_params["dTwH"][i]] = dTwi[i]
                     dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [round(hi[i], 3)]
                     dict_df[target]["DT"][p_params["dTwH"][i]] = [round(dTwi[i], 3)]
-                    dict_df[target]["Uw"][p_params["dTwH"][i].replace("dTw", "Uw")] = [round(U, 3)]
+                    dict_df[target]["Uw"][p_params["dTwH"][i].replace("dTw", "Uw")] = [
+                        round(U, 3)
+                    ]
 
                     error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
                     error_h.append(abs(1 - (hwH[i] / hi[i])))
@@ -587,7 +594,9 @@ def compute_error(
 
                 dict_df[target]["HeatCoeff"][p_params["hw"][i]] = [round(hg, 3)]
                 dict_df[target]["DT"][p_params["dTw"][i]] = [round(dTg, 3)]
-                dict_df[target]["Uw"][p_params["dTw"][i].replace("dTw", "Uw")] = [round(Umean, 3)]
+                dict_df[target]["Uw"][p_params["dTw"][i].replace("dTw", "Uw")] = [
+                    round(Umean, 3)
+                ]
 
             if args.debug:
                 print(
