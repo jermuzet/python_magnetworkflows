@@ -134,12 +134,12 @@ def update(e, jsonmodel: str, parameters: dict):
 
 
 # TODO create toolboxes_options on the fly
-def init(fname, e, args, jsonmodel: str, meshmodel: str, directory: str = ""):
+def init(fname, e, args, pwd: str, jsonmodel: str, meshmodel: str, directory: str = ""):
     """
     init feelp env and feelpp problem
     """
 
-    pwd = os.getcwd()
+    # pwd = os.getcwd()
     if not e:
         e = fpp.Environment(
             [f"{fname}.py"],
@@ -198,7 +198,7 @@ def solve(
 
     if e is None:
         (e, f, fields) = init(
-            fname, e, args, jsonmodel, meshmodel, directory=feelpp_directory
+            fname, e, args, "", jsonmodel, meshmodel, directory=feelpp_directory
         )
         if e.isMasterRank():
             print("solve: load cfg", flush=True)
@@ -227,7 +227,7 @@ def solve(
         e.worldComm().barrier()
         if isFile:
             raise RuntimeError(
-                f"solve: backup U.h5 to {save_h5} - fails since file already exists"
+                f"solve: backup {field}.h5 to {save_h5} - fails since file already exists"
             )
         else:
             # Rename the file
@@ -327,46 +327,54 @@ def solve(
 
         (err_max, err_max_dT, err_max_h, table_, p_params) = res
 
-        if not args.reloadcfg:
-            # make f.addParameterInModelProperties()
-            if e.isMasterRank():
-                print("update params", flush=True)
-            for param in params[target]:
-                print(
-                    f"f.addParameterInModelProperties({param}, {parameters[param]}), rank={comm.localRank()}"
-                )
-                f.addParameterInModelProperties(param, parameters[param])
+        table_.append(err_max)
+        table.append(table_)
+        if (
+            err_max <= args.eps
+            and err_max_dT <= max(args.eps, 1e-2)
+            and err_max_h <= max(args.eps, 1e-2)
+        ):
+            break
 
-            selected_params = ["hw", "dTw"]
-            if "H" in args.cooling:
-                selected_params = ["hwH", "dTwH"]
-                if "Z" in args.cooling:
-                    selected_params = ["hwH"]
+        # make f.addParameterInModelProperties()
+        if e.isMasterRank():
+            print("update params", flush=True)
+        for param in params[target]:
+            print(
+                f"f.addParameterInModelProperties({param}, {parameters[param]}), rank={comm.localRank()}"
+            )
+            f.addParameterInModelProperties(param, parameters[param])
 
-            if e.isMasterRank():
-                print("update p_params", flush=True)
-            for param, values in p_params.items():
+        selected_params = ["hw", "dTw"]
+        if "H" in args.cooling:
+            selected_params = ["hwH", "dTwH"]
+            if "Z" in args.cooling:
+                selected_params = ["hwH"]
+
+        if e.isMasterRank():
+            print("update p_params", flush=True)
+        for param, values in p_params.items():
+            # print(
+            #    f"param={param}, values={values} (type={type(values)}), rank={comm.localRank()}"
+            # )
+            if param in selected_params:
                 # print(
-                #    f"param={param}, values={values} (type={type(values)}), rank={comm.localRank()}"
+                #    f"param={param}, values={values} (type={type(values)}), rank={comm.localRank()}, selected"
                 # )
-                if param in selected_params:
-                    # print(
-                    #    f"param={param}, values={values} (type={type(values)}), rank={comm.localRank()}, selected"
-                    # )
-                    if isinstance(values, list):
-                        for val in values:
-                            print(
-                                f"f.addParameterInModelProperties({val}, {parameters[val]}, rank={comm.localRank()}, list"
-                            )
-                            f.addParameterInModelProperties(val, parameters[val])
-                    else:
+                if isinstance(values, list):
+                    for val in values:
                         print(
-                            f"f.addParameterInModelProperties({values}, {parameters[values]}, rank={comm.localRank()}"
+                            f"f.addParameterInModelProperties({val}, {parameters[val]}, rank={comm.localRank()}, list"
                         )
-                        f.addParameterInModelProperties(values, parameters[values])
+                        f.addParameterInModelProperties(val, parameters[val])
+                else:
+                    print(
+                        f"f.addParameterInModelProperties({values}, {parameters[values]}, rank={comm.localRank()}"
+                    )
+                    f.addParameterInModelProperties(values, parameters[values])
 
-            # update Parameters
-            f.updateParameterValues()
+        # update Parameters
+        f.updateParameterValues()
 
         if e.isMasterRank():
             print(
@@ -374,17 +382,8 @@ def solve(
                 flush=True,
             )
 
-        table_.append(err_max)
-        table.append(table_)
         create_field(e, f, fields, targets, parameters, basedir, args.debug)
         update(e, jsonmodel, parameters)
-
-        if (
-            err_max <= args.eps
-            and err_max_dT <= max(args.eps, 1e-2)
-            and err_max_h <= max(args.eps, 1e-2)
-        ):
-            break
 
         # reload feelpp
         if args.reloadcfg:
