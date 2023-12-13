@@ -214,7 +214,7 @@ def Uw(
     fguess: float = 0.055,
     uguess: float = 0,
     rugosity: float = 0.012e-3,
-) -> float:
+) -> tuple:
     """
     compute water velocity
     """
@@ -257,7 +257,7 @@ def Uw(
     print(f"Uw={U:.3f}, Cf={f:.3e} ({friction}), rugosity={rugosity:.3e}, Re={Re:.3f}")
     if isOk != True:
         raise RuntimeError(f"Uw: max it reached")
-    return U
+    return U, f
 
 
 def Nusselt(params: tuple, Tw: float, Pw: float) -> float:

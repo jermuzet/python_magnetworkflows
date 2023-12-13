@@ -277,6 +277,8 @@ def compute_error(
             SpecHeat = [0] * len(Dh)
             Q = [0] * len(Dh)
 
+            dict_df[target]["cf"] = pd.DataFrame()
+
             if "Z" in args.cooling:
                 NCoolingCh = len(Dh)
                 FluxZ = dict_df[target]["FluxZ"]
@@ -380,7 +382,7 @@ def compute_error(
                             friction=args.friction,
                         )
 
-                        tmp_U = Uw(
+                        tmp_U, cf = Uw(
                             _new[0] + dTwi[-1] / 2.0,
                             Pressure,
                             dPressure,
@@ -417,6 +419,7 @@ def compute_error(
                     dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [round(hi[i], 3)]
                     dict_df[target]["DT"][cname] = [round(dTwi[i], 3)]
                     dict_df[target]["Uw"]["Uw_" + cname] = [round(U, 3)]
+                    dict_df[target]["cf"]["cf_" + cname] = [cf]
                     # !! export FluxZ = dict_df[target]["Flux"] with sections regrouped !!
                     # dict_df[target]["Flux"][cname] = PowerCh
 
@@ -467,7 +470,7 @@ def compute_error(
                     tmp_dTwi = dTwH[i]
                     tmp_hi = hwH[i]
                     print(
-                        f"\ncname={cname}, i={i}, d={d:.5f}, s={s:.5f}, L={Lh[i]:.3f}, U={U:.3f}, PowerCh={PowerCh:.3f}, tmp_dTwi={tmp_dTwi:.3f}, tmp_hi={tmp_hi:.3f}",
+                        f"\ncname={cname}, i={i}, d={d:.5f}, s={s:.6e}, L={Lh[i]:.3f}, U={U:.3f}, PowerCh={PowerCh:.3f}, tmp_dTwi={tmp_dTwi:.3f}, tmp_hi={tmp_hi:.3f}",
                         flush=True,
                     )
 
@@ -487,7 +490,7 @@ def compute_error(
                             friction=args.friction,
                         )
 
-                        tmp_U = Uw(
+                        tmp_U, cf = Uw(
                             TwH[i] + tmp_dTwi / 2.0,
                             Pressure,
                             dPressure,
@@ -499,7 +502,7 @@ def compute_error(
                         n_tmp_flow = tmp_U * s
                         if args.debug:
                             print(
-                                f"tmp_flow={tmp_flow:.3f}, n_tmp_flow={n_tmp_flow:.3f}, U={U:.3f}, tmp_U={tmp_U:.3f}, dTwH[{i}]={dTwH[i]:.3f}, tmp_dTwi={tmp_dTwi:.3f}"
+                                f"tmp_flow={tmp_flow:.6e}, n_tmp_flow={n_tmp_flow:.6e}, U={U:.3f}, tmp_U={tmp_U:.3f}, dTwH[{i}]={dTwH[i]:.3f}, tmp_dTwi={tmp_dTwi:.3f}"
                             )
                         U = tmp_U
 
@@ -519,6 +522,9 @@ def compute_error(
                     dict_df[target]["DT"][p_params["dTwH"][i]] = [round(dTwi[i], 3)]
                     dict_df[target]["Uw"][p_params["dTwH"][i].replace("dTw", "Uw")] = [
                         round(U, 3)
+                    ]
+                    dict_df[target]["cf"][p_params["dTwH"][i].replace("dTw", "cf")] = [
+                        cf
                     ]
 
                     error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))

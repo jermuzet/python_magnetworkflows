@@ -63,7 +63,7 @@ def main():
 
     e = None
     (e, f, fields) = init(
-        fname, e, args, jsonmodel, meshmodel, directory=feelpp_directory
+        fname, e, args, pwd, jsonmodel, meshmodel, directory=feelpp_directory
     )
     if e.isMasterRank():
         print("commissionning: load cfg", flush=True)
@@ -76,7 +76,6 @@ def main():
         print(f"jsonmodel={jsonmodel}")
         print(f"meshmodel={meshmodel}")
 
-  
     Commissioning = True
     commissioning_df = pd.DataFrame()
 
@@ -96,15 +95,17 @@ def main():
             "Uw": pd.DataFrame(),
         }
         if "Z" in args.cooling:
-            global_df[filter[:-1]]["FluxZ"]=pd.DataFrame()
-        
+            global_df[filter[:-1]]["FluxZ"] = pd.DataFrame()
+        if "H" in args.cooling:
+            global_df[filter[:-1]]["cf"] = pd.DataFrame()
+
         if "steplist" in values:
             step_i[mname] = 0
             args.mdata[mname]["value"] = values["steplist"][step_i[mname]]
             I.append(values["steplist"][step_i[mname]])
         else:
             I.append(values["value"])
-        
+
     global_df["MSite"] = {"U": pd.DataFrame()}
 
     targets = {}
@@ -124,8 +125,6 @@ def main():
                 'MinHoop', 'MeanHoop', 'MaxHoop']
     
     """
-
-    
 
     nstep = 0
     while Commissioning:
@@ -160,7 +159,7 @@ def main():
             )
 
             table_final = pd.DataFrame([f"{I}"], columns=["measures"])
-            table_final = exportResults(
+            table_final, global_df = exportResults(
                 args,
                 parameters,
                 table,
@@ -175,23 +174,42 @@ def main():
             else:
                 commissioning_df = pd.concat([commissioning_df, table_final])
 
-            nstep += 1
-            for i, (mname, values) in enumerate(args.mdata.items()):
-                filter = values["filter"]
-                if "steplist" in values:
-                    step_i[mname] += 1
-                    if len(values["steplist"]) == step_i[mname]:
-                        Commissioning = False
-                    else:
-                        targets[f"{filter}I"]["objectif"] = values["steplist"][step_i[mname]]
-                    I[i] = targets[f"{filter}I"]["objectif"]
+        nstep += 1
+        for i, (mname, values) in enumerate(args.mdata.items()):
+            filter = values["filter"]
+            if "steplist" in values:
+                step_i[mname] += 1
+                if len(values["steplist"]) == step_i[mname]:
+                    Commissioning = False
                 else:
-                    targets[f"{filter}I"]["objectif"] -= values["step"]
-                    I[i] = targets[f"{filter}I"]["objectif"]
-                    if I[i] <= 0 or nstep >= values["stepmax"]:
-                        Commissioning = False
+                    targets[f"{filter}I"]["objectif"] = values["steplist"][
+                        step_i[mname]
+                    ]
+                I[i] = targets[f"{filter}I"]["objectif"]
+            else:
+                targets[f"{filter}I"]["objectif"] -= values["step"]
+                I[i] = targets[f"{filter}I"]["objectif"]
+                if I[i] <= 0 or nstep >= values["stepmax"]:
+                    Commissioning = False
 
-            commissioning_df.to_csv(f"measures.csv", index=True)
+        if Commissioning:
+            (e, f, fields) = init(
+                fname, e, args, pwd, jsonmodel, meshmodel, directory=feelpp_directory
+            )
+
+    if e.isMasterRank():
+        for target, values in global_df.items():
+            mname = target
+            if mname:
+                mname = f"{mname}_"
+            for key, df in values.items():
+                if isinstance(df, pd.DataFrame):
+                    df_T = df.T
+                    outdir = f"{mname}{key}.measures"
+                    os.makedirs(outdir, exist_ok=True)
+                    df_T.to_csv(f"{outdir}/values.csv", index=True)
+
+        commissioning_df.to_csv(f"measures.csv", index=False)
 
     return 0
 
