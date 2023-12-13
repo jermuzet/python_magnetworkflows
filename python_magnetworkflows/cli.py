@@ -18,7 +18,7 @@ from .oneconfig import oneconfig
 from .solver import init
 
 
-def options(description: str, epilog):
+def options(description: str, epilog: str):
     """
     define options
     """
@@ -517,7 +517,7 @@ def main():
         "\n"
         "Before running you need a flow_params for each magnet\n"
     )
-    print(f"epilog: {epilog} (type={type(epilog)})")
+    # print(f"epilog: {epilog} (type={type(epilog)})", flush=True)
 
     parser = options(description, epilog)
     args = parser.parse_args()

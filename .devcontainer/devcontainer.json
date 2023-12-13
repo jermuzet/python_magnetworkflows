@@ -39,11 +39,18 @@
 			"python.linting.pylintPath": "/usr/bin/pylint",
 			"python.testing.pytestPath": "/usr/bin/pytest-3"
 		},
-		"extensions": [
-			"ms-python.python",
-			"ms-python.vscode-pylance",
-			"ms-python.black-formatter"
-		]
+		// Add the IDs of extensions you want installed when the container is created in the array below.
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-python.black-formatter"
+			],
+			"[python]": {
+				"editor.defaultFormatter": "ms-python.black-formatter",
+				"editor.formatOnSave": true
+			}
+		}
 	},
 	// Comment out the next line if you want to run as root instead
 	"remoteUser": "feelpp"

@@ -32,7 +32,8 @@ def compute_error(
     parameters: all jsonmodel parameters
     dict_df:
     """
-    print(f"compute_error: it={it}")
+    if e.isMasterRank:
+        print(f"compute_error: it={it}, targets={targets},  ", flush=True)
 
     table_ = [it]
     err_max = 0
@@ -45,11 +46,15 @@ def compute_error(
     List_Qout = []
     Tw0 = None
     for target, values in targets.items():
-        objectif = -values["objectif"]
+        print(
+            f'dict_df[target]["target"]={dict_df[target]["target"]} (type={type(dict_df[target]["target"])})'
+        )
+
+        objectif = -float(values["objectif"])
         # multiply by -1 because of orientation of pseudo Axi domain Oy == -U_theta
         filtered_df = getTarget(targets, target, e, args.debug)
 
-        relax = values["relax"]
+        relax = float(values["relax"])
 
         # TODO: add stats for filtered_df to table_: mean, ecart type, min/max??
 
