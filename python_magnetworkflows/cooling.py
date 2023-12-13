@@ -214,7 +214,7 @@ def Uw(
     fguess: float = 0.055,
     uguess: float = 0,
     rugosity: float = 0.012e-3,
-) -> float:
+) -> tuple:
     """
     compute water velocity
     """
