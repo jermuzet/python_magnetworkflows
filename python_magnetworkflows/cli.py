@@ -369,12 +369,13 @@ def exportResults(
         for key, df in values.items():
             if isinstance(df, pd.DataFrame):
                 df_T = df.T
-                outdir = f"{prefix}{key}.measures"
-                os.makedirs(outdir, exist_ok=True)
-                df_T.to_csv(f"{outdir}/values.csv", index=True)
 
                 if global_df:
                     global_df[mname][key] = pd.concat([global_df[mname][key], df])
+                else:
+                    outdir = f"{prefix}{key}.measures"
+                    os.makedirs(outdir, exist_ok=True)
+                    df_T.to_csv(f"{outdir}/values.csv", index=True)
 
                 if key == "PowerM":
                     table_final[f"{prefix}PowerM[MW]"] = df_T.iloc[0, 0] * 1e-6
@@ -403,14 +404,16 @@ def exportResults(
                 dfT = pd.concat(list_dfT, sort=True)
                 if key == "statsT":
                     dfT.drop(columns=["max", "min", "mean"], inplace=True)
-                    
+
                 dfT_T = dfT.T
-                outdir = f"{prefix}{key}.measures"
-                os.makedirs(outdir, exist_ok=True)
-                dfT_T.to_csv(f"{outdir}/values.csv", index=True)
+
                 # in commisionning:
                 if global_df:
                     global_df[mname][key] = pd.concat([global_df[mname][key], dfT])
+                else:
+                    outdir = f"{prefix}{key}.measures"
+                    os.makedirs(outdir, exist_ok=True)
+                    dfT_T.to_csv(f"{outdir}/values.csv", index=True)
 
                 if key == "statsTH":
                     T_method = {
@@ -486,9 +489,10 @@ def exportResults(
                     columnName.replace("Ucoil", "R").replace("[V]", "[ohm]")
                 ] = (columnData / dict_df[target]["target"])
 
-    outdir = f"U.measures"
-    os.makedirs(outdir, exist_ok=True)
-    table.to_csv(f"{outdir}/values.csv", index=False)
+    if not global_df:
+        outdir = f"U.measures"
+        os.makedirs(outdir, exist_ok=True)
+        table.to_csv(f"{outdir}/values.csv", index=False)
 
     if "mag" in args.cfgfile:
         df = pd.read_csv("magnetic.measures/values.csv")
@@ -501,7 +505,7 @@ def exportResults(
         table_final.T.to_csv(f"measures{suffix}.csv", index=True)
 
     print(table_final.T)
-    return table_final
+    return table_final, global_df
 
 
 def main():
@@ -550,7 +554,7 @@ def main():
 
     e = None
     (e, f, fields) = init(
-        fname, e, args, jsonmodel, meshmodel, directory=feelpp_directory
+        fname, e, args, pwd, jsonmodel, meshmodel, directory=feelpp_directory
     )
 
     if e.isMasterRank():
@@ -598,7 +602,9 @@ def main():
 
     if e.isMasterRank():
         table_final = pd.DataFrame(["values"], columns=["measures"])
-        table_final = exportResults(args, parameters, table, table_final, dict_df)
+        table_final, global_df = exportResults(
+            args, parameters, table, table_final, dict_df
+        )
 
     if e.isMasterRank():
         print("end of cli")
