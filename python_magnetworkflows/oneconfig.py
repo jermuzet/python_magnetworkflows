@@ -74,7 +74,7 @@ def oneconfig(
                 "MaxTH": pd.DataFrame(),
                 "MeanTH": pd.DataFrame(),
             },
-            "target": values["objectif"],
+            "target": float(values["objectif"]),
             "flow": 0,
             "Tout": 0,
             "Uw": pd.DataFrame(),
