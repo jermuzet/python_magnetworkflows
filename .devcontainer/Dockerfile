@@ -1,5 +1,5 @@
 # FROM ghcr.io/feelpp/feelpp:v0.110.2-focal
-FROM ghcr.io/feelpp/feelpp:v0.111.0-preview.7-bullseye
+FROM ghcr.io/feelpp/feelpp:v0.111.0-preview.8-bullseye
 
 USER root
 
@@ -48,7 +48,7 @@ RUN apt update \
     && apt-get -y install python3-pip python-is-python3 \
     && apt-get -y install python3-pint \
     && apt-get -y install curl \
-    && apt-get -y install python3-decouple python3-requests \
+    && apt-get -y install python3-decouple python3-requests python3-natsort \
     # Add specific lncmi stuff \
     && apt-get install python3-iapws \
     # [Optional] Add sudo support for the non-root user
