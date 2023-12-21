@@ -11,6 +11,8 @@ import pandas as pd
 import json
 import re
 
+from natsort import natsorted
+
 from .waterflow import waterflow
 from .cooling import getDT, getHeatCoeff
 
@@ -369,7 +371,7 @@ def exportResults(
         for key, df in values.items():
             if isinstance(df, pd.DataFrame):
                 df_T = df.T
-
+                df_T = df_T.reindex(index=natsorted(df_T.index))
                 if global_df:
                     global_df[mname][key] = pd.concat([global_df[mname][key], df])
                 else:
@@ -406,7 +408,7 @@ def exportResults(
                     dfT.drop(columns=["max", "min", "mean"], inplace=True)
 
                 dfT_T = dfT.T
-
+                dfT_T = dfT_T.reindex(index=natsorted(dfT_T.index))
                 # in commisionning:
                 if global_df:
                     global_df[mname][key] = pd.concat([global_df[mname][key], dfT])
