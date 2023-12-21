@@ -159,9 +159,21 @@ def compute_error(
         PowerM = dict_df[target]["PowerM"].iloc[-1, 0]
         SPower_H = dict_df[target]["PowerH"].iloc[-1].sum()
         SFlux_H = dict_df[target]["Flux"].iloc[-1].sum()
-        t_headers = ["Part", "Flux[W]"]
-        t_parts = dict_df[target]["Flux"].columns.values.tolist()
-        t_power = dict_df[target]["Flux"].iloc[-1]
+
+        # sort (ref https://stackoverflow.com/questions/29580978/naturally-sorting-pandas-dataframe)
+        from natsort import natsorted
+
+        tutu = dict_df[target]["Flux"]
+        sorted_columns = natsorted(list(dict_df[target]["Flux"].columns))
+        # print(f"with natsort: {sorted_columns}")
+        tutu = dict_df[target]["Flux"][sorted_columns]
+        # print(f"tutu: {tutu}")
+
+        t_headers = ["Part", "Flux[MW]"]
+        t_parts = tutu.columns.values.tolist()
+        # t_power = tutu.iloc[-1]
+        t_power = [f"{s/1.e+6:.3f}" for s in tutu.iloc[-1].tolist()]
+        # print(type(t_power.tolist()))
         print(
             tabulate(list(zip(t_parts, t_power)), headers=t_headers),
             flush=True,
@@ -194,11 +206,11 @@ def compute_error(
             for key in p_params:
                 print(f"{target}: {key}={p_params[key]}", flush=True)
 
-        if Powers_Diff / PowerM > 1e-3:
+        if Powers_Diff / PowerM > 1.0e-3:
             return f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM:.3f} SPower_H={SPower_H:.3f}"
-        if Powers_Diff / PowerM > 1e-3:
+        if Powers_Diff / PowerM > 1.0e-3:
             return f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM:.3f} SPower_H={SPower_H:.3f}"
-        if PowerFlux_Diff / PowerM > 1e-1:
+        if PowerFlux_Diff / PowerM > 1.0e-3:
             return f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM:.3f} SFlux_H={SFlux_H:.3f}"
 
         # assert (
@@ -234,7 +246,6 @@ def compute_error(
             Umean * sum(Sh),
             PowerM,
             290.75,
-            0,
             Pressure,
         )
         print(
@@ -279,25 +290,33 @@ def compute_error(
 
             dict_df[target]["cf"] = pd.DataFrame()
 
+            FluxZ = None
             if "Z" in args.cooling:
-                NCoolingCh = len(Dh)
                 FluxZ = dict_df[target]["FluxZ"]
 
-                for i, (d, s) in enumerate(zip(Dh, Sh)):
-                    cname = p_params["Dh"][i].replace("Dh_", "")
+            Tw0 = 0
+            if not isinstance(TwH[0], dict):
+                Tw0 = TwH[0]
 
-                    U = Umean
+            for i, (d, s) in enumerate(zip(Dh, Sh)):
+                cname = p_params["Dh"][i].replace("Dh_", "")
+                PowerCh = dict_df[target]["Flux"][cname].iloc[-1]
 
-                    # load T_z_old from csv
-                    # print(f"TwH[{i}]: {TwH[i]}")
+                # when gradHZ:
+                FluxCh_dz = []
+                Tw_z_old = []
+                hw_z_old = []
+                # hw_z_old = []
+                if FluxZ is not None:
                     csvfile = TwH[i]["filename"].replace("$cfgdir", basedir)
-                    # replace $cfgdir by actual value from feelpp environment e
-                    # print(f"cwd={os.getcwd()}, csvfile={csvfile}")
                     Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
-                    nsections = len(Tw_data)
-                    _old = Tw_data["Tw"].to_list()
-                    dTwH[i] = _old[-1] - _old[0]
-                    section = len(_old)
+                    Tw0 = Tw_data["Tw"].iloc[0]
+                    Tw_z_old = Tw_data["Tw"].to_list()
+                    if not "hw" in Tw_data:
+                        Tw_data["hw"] = [80000] * len(Tw_z_old)
+                    hw_z_old = Tw_data["hw"].to_list()
+                    zsections = Tw_data["Z"].to_list()
+                    dTwH[i] = Tw_z_old[-1] - Tw_z_old[0]
 
                     # get PowerCh_Z
                     key_dz = [
@@ -305,262 +324,170 @@ def compute_error(
                         for fkey in FluxZ.columns.values.tolist()
                         if fkey.endswith(cname)
                     ]
-                    if nsections != len(key_dz) + 1:
+                    if len(Tw_data) != len(key_dz) + 1:
                         return f"inconsistant data for Tw and FluxZ for {cname}"
-                    # assert (
-                    #     nsections == len(key_dz) + 1
-                    # ), f"inconsistant data for Tw and FluxZ for {cname}"
-                    if args.debug and e.isMasterRank():
-                        print(f"key_dz={key_dz}")
+
                     FluxCh_dz = [
                         FluxZ.at[FluxZ.index[-1], f"FluxZ{i}_{cname}"]
                         for i in range(len(key_dz))
                     ]
-                    PowerCh = sum(FluxCh_dz)
+                    if abs(1 - sum(FluxCh_dz) / PowerCh) > 1e-3:
+                        return f"Sum(FluxZ)!=Flux[{cname}]: PowerCh={PowerCh} Flux_H={sum(FluxCh_dz)} (res={sum(FluxCh_dz) / PowerCh})"
 
-                    print(
-                        f'\nFlux/Sum(FluxZ)[{cname}]: {PowerCh:.3f} = {dict_df[target]["Flux"][cname].iloc[-1]:.3f}',
-                        flush=True,
+                U = Umean
+                tmp_dTwi = dTwH[i]
+                tmp_hi_old = 0
+                if isinstance(hwH[i], dict):
+                    tmp_hi_old = hw_z_old[0]
+                else:
+                    tmp_hi_old = hwH[i]
+                print(
+                    f"\ncname={cname}, i={i}, d={d:.5f}, s={s:.6e}, L={Lh[i]:.3f}, U={U:.3f}, PowerCh={PowerCh:.3f}, tmp_dTwi={tmp_dTwi:.3f}, tmp_hi_old={tmp_hi_old:.3f}",
+                    flush=True,
+                )
+
+                Tw_z = Tw_z_old
+                hw_z = hw_z_old
+                tmp_hi = tmp_hi_old
+                tmp_Twh = 0
+                if isinstance(TwH[i], dict):
+                    tmp_Twh = Tw_z[0]
+                else:
+                    tmp_Twh = TwH[i]
+                while True:
+                    tmp_flow = U * s
+                    tmp_dTwi = getDT(
+                        tmp_flow, PowerCh, tmp_Twh + tmp_dTwi / 2.0, Pressure
                     )
-                    if args.debug:
-                        for k, flux in enumerate(FluxCh_dz):
-                            print(f"{key_dz[k]} FluxZ[{k}]={flux:.3f}")
-                    if (
-                        abs(1 - PowerCh / dict_df[target]["Flux"][cname].iloc[-1])
-                        > 1e-1
-                    ):
-                        return f"Sum(FluxZ)!=Flux[{cname}]: PowerCh={PowerCh} Flux_H={dict_df[target]['Flux'][cname].iloc[-1]} (res={PowerCh / dict_df[target]['Flux'][cname].iloc[-1]})"
-                    # assert (
-                    #     abs(1 - PowerCh / dict_df[target]["Flux"][cname].iloc[-1])
-                    #     < 1e-1
-                    # ), f"Sum(FluxZ)!=Flux[{cname}]: PowerCh={PowerCh} Flux_H={dict_df[target]['Flux'][cname].iloc[-1]} (res={PowerCh / dict_df[target]['Flux'][cname].iloc[-1]})"
 
-                    while True:
-                        tmp_flow = U * s
-
-                        dT_Ch = getDT(
+                    for k, flux in enumerate(FluxCh_dz):
+                        Pw = Pressure - dPressure * (zsections[k] - zsections[0]) / (
+                            zsections[-1] - zsections[0]
+                        )
+                        dTw_z = getDT(
                             tmp_flow,
-                            PowerCh,
-                            (_old[0] + _old[-1]) / 2.0,
-                            0,
-                            Pressure,
+                            flux,
+                            (Tw_z_old[k] + Tw_z_old[k + 1]) / 2.0,
+                            Pw,
                         )
-                        _new = copy.deepcopy(_old)
-                        if args.debug:
-                            print(f"gradHZ: {cname} _old: {_old}")
-                        for k, flux in enumerate(FluxCh_dz):
-                            dT_old = _old[k + 1] - _old[k]
-                            dT_new = getDT(
-                                tmp_flow,
-                                flux,
-                                (_old[k] + _old[k + 1]) / 2.0,
-                                0,
-                                Pressure,
-                            )
+                        Tw_z[k + 1] = Tw_z[k] + dTw_z
 
-                            print(
-                                f"gradHZ: {cname} {key_dz[k]} - flow={tmp_flow:.3f}, power={flux:.3f}, Tw={_old[k]:.3f}, dTw={dT_old:.3f}, P={Pressure:.3f}, dT={dT_new:.3f}, dTch={dT_Ch:.3f}"
-                            )
-                            _new[k + 1] = _new[k] + dT_new
-
-                        # print(f"_new: {_new}, relax={relax}")
-                        for k in range(section):
-                            # print(f's={s}, {1-relax} * {_new[s]} + {relax} * {_old[s]}')
-                            _new[k] = (1 - relax) * _new[k] + relax * _old[k]
-                        print(f"gradHZ: {cname} _new (after relax={relax}): {_new}")
-
-                        dTwi[i] = _new[-1] - _new[0]
-                        tmp_hi = getHeatCoeff(
+                    for k in range(len(Tw_z)):
+                        Pw = Pressure - dPressure * (zsections[k] - zsections[0]) / (
+                            zsections[-1] - zsections[0]
+                        )
+                        hw_z[k] = getHeatCoeff(
                             d,
                             Lh[i],
                             U,
-                            _new[0] + dTwi[-1] / 2.0,
-                            hwH[i],
+                            Tw_z[k],
                             Pressure,
                             dPressure,
                             model=args.heatcorrelation,
                             friction=args.friction,
                         )
-
-                        tmp_U, cf = Uw(
-                            _new[0] + dTwi[-1] / 2.0,
-                            Pressure,
-                            dPressure,
-                            d,
-                            Lh[i],
-                            friction=args.friction,
-                            uguess=U,
-                        )
-                        n_tmp_flow = tmp_U * s
-                        if args.debug:
+                        if e.isMasterRank():
                             print(
-                                f"tmp_flow={tmp_flow:.3f}, n_tmp_flow={n_tmp_flow:.3f}, U={U:.3f}, tmp_U={tmp_U:.3f}, dTwH[{i}]={dTwH[i]:.3f}, tmp_dTwi={tmp_dTwi:.3f}"
+                                f"Tw_z[{k}]={Tw_z[k]}, _h={hw_z[k]}, Pw={Pw}, Pressure={Pressure}, dP={dPressure}",
+                                flush=True,
                             )
-                        U = tmp_U
 
-                        if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
-                            break
-
-                        _old = copy.deepcopy(_new)
-
-                    Q[i] = tmp_flow
-                    hi[i] = (1.0 - relax) * tmp_hi + relax * hwH[i]
-
-                    # save back to csv: T_z.to_csv(f"Tw_{cname}.csv", index=False)
-                    Tw_data["Tw"] = _new
-                    # print(f'save _new={_new} to {csvfile}')
-                    Tw_data.to_csv(f"{csvfile}", index=False)
-                    e.worldComm().barrier()
-
-                    # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[-1])
-                    # f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
-                    parameters[p_params["hwH"][i]] = hi[i]
-                    # parameters[p_params["dTwH"][i]] = dTwi[-1]
-                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [round(hi[i], 3)]
-                    dict_df[target]["DT"][cname] = [round(dTwi[i], 3)]
-                    dict_df[target]["Uw"]["Uw_" + cname] = [round(U, 3)]
-                    dict_df[target]["cf"]["cf_" + cname] = [cf]
-                    # !! export FluxZ = dict_df[target]["Flux"] with sections regrouped !!
-                    # dict_df[target]["Flux"][cname] = PowerCh
-
-                    error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
-                    error_h.append(abs(1 - (hwH[i] / hi[i])))
-
-                    Tw0 = Tw_data["Tw"].iloc[0]
-
-                    print(
-                        f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d:3e}, Sh={s:.3e}, Power={PowerCh:.3f}, TwH={Tw0:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}",
-                        flush=True,
+                    tmp_hi = getHeatCoeff(
+                        d,
+                        Lh[i],
+                        U,
+                        tmp_Twh + tmp_dTwi / 2.0,
+                        Pressure,
+                        dPressure,
+                        model=args.heatcorrelation,
+                        friction=args.friction,
                     )
 
-                    Ti[i] = Tw0 + dTwi[i]
-                    VolMass[i] = rho(Tw0 + dTwi[i] / 2.0, Pressure)
-                    SpecHeat[i] = Cp(Tw0 + dTwi[i] / 2.0, Pressure)
-
-                print(
-                    f"Flow={flow.flow(abs(objectif)):.3f}, Sum(Qh)={sum(Q):.3f}, Sum(Sh)={sum(Sh):.3e}",
-                    flush=True,
-                )
-
-                # compute an estimate of dTg
-                Tout = getTout(Ti, VolMass, SpecHeat, Q)
-                VolMassout = rho(Tout, Pressure)
-                SpecHeatout = Cp(Tout, Pressure)
-                Qout = Umean * sum(Sh)
-
-                List_Tout.append(Tout)
-                List_VolMassout.append(VolMassout)
-                List_SpecHeatout.append(SpecHeatout)
-                List_Qout.append(Qout)
-
-                dTg = Tout - Tw0
-                print(
-                    f"{target}: Tout={Tout:.3f}  Tw={Tw0:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f})",
-                    flush=True,
-                )
-                dict_df[target]["Tout"] = Tout
-                # exit(1)
-
-            else:
-                for i, (d, s) in enumerate(zip(Dh, Sh)):
-                    cname = p_params["Dh"][i].replace("Dh_", "")
-                    PowerCh = dict_df[target]["Flux"][cname].iloc[-1]
-
-                    U = Umean
-                    tmp_dTwi = dTwH[i]
-                    tmp_hi = hwH[i]
-                    print(
-                        f"\ncname={cname}, i={i}, d={d:.5f}, s={s:.6e}, L={Lh[i]:.3f}, U={U:.3f}, PowerCh={PowerCh:.3f}, tmp_dTwi={tmp_dTwi:.3f}, tmp_hi={tmp_hi:.3f}",
-                        flush=True,
+                    tmp_U, cf = Uw(
+                        tmp_Twh + tmp_dTwi / 2.0,
+                        Pressure,
+                        dPressure,
+                        d,
+                        Lh[i],
+                        friction=args.friction,
+                        uguess=U,
                     )
-
-                    while True:
-                        tmp_flow = U * s
-                        tmp_dTwi = getDT(tmp_flow, PowerCh, TwH[i], dTwH[i], Pressure)
-
-                        tmp_hi = getHeatCoeff(
-                            d,
-                            Lh[i],
-                            U,
-                            TwH[i] + tmp_dTwi / 2.0,
-                            hwH[i],
-                            Pressure,
-                            dPressure,
-                            model=args.heatcorrelation,
-                            friction=args.friction,
+                    n_tmp_flow = tmp_U * s
+                    if args.debug:
+                        print(
+                            f"tmp_flow={tmp_flow:.6e}, n_tmp_flow={n_tmp_flow:.6e}, U={U:.3f}, tmp_U={tmp_U:.3f}, dTwH[{i}]={tmp_Twh:.3f}, tmp_dTwi={tmp_dTwi:.3f}",
+                            flush=True,
                         )
+                    U = tmp_U
+                    dTwH[i] = Tw_z_old[-1] - Tw_z_old[0]
+                    Tw_z_old = Tw_z
+                    hw_z_old = hw_z
 
-                        tmp_U, cf = Uw(
-                            TwH[i] + tmp_dTwi / 2.0,
-                            Pressure,
-                            dPressure,
-                            d,
-                            Lh[i],
-                            friction=args.friction,
-                            uguess=U,
-                        )
-                        n_tmp_flow = tmp_U * s
-                        if args.debug:
-                            print(
-                                f"tmp_flow={tmp_flow:.6e}, n_tmp_flow={n_tmp_flow:.6e}, U={U:.3f}, tmp_U={tmp_U:.3f}, dTwH[{i}]={dTwH[i]:.3f}, tmp_dTwi={tmp_dTwi:.3f}"
-                            )
-                        U = tmp_U
+                    if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
+                        break
 
-                        if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
-                            break
+                if FluxZ is not None:
+                    Tw_data["Tw"] = Tw_z
+                    Tw_data["hw"] = hw_z
 
-                    Q[i] = tmp_flow
-                    dTwi[i] = (1.0 - relax) * tmp_dTwi + relax * dTwH[i]
-                    Ti[i] = TwH[i] + dTwi[i]
-                    hi[i] = (1.0 - relax) * tmp_hi + relax * hwH[i]
+                Q[i] = tmp_flow
+                dTwi[i] = (1.0 - relax) * tmp_dTwi + relax * dTwH[i]
+                for k in range(len(Tw_z)):
+                    Tw_z[k] = (1.0 - relax) * Tw_z[k] + relax * Tw_z_old[k]
+                    hw_z[k] = (1.0 - relax) * hw_z[k] + relax * hw_z_old[k]
+                Ti[i] = tmp_Twh + dTwi[i]
+                hi[i] = (1.0 - relax) * tmp_hi + relax * tmp_hi_old
 
-                    # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[i])
-                    # f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
-                    parameters[p_params["hwH"][i]] = hi[i]
+                # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[i])
+                # f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
+                print(
+                    f'parameters[p_params["hwH"][{i}]={p_params["hwH"][i]}]: {parameters[p_params["hwH"][i]]}'
+                )
+                parameters[p_params["hwH"][i]] = hi[i]
+                if FluxZ is None:
                     parameters[p_params["dTwH"][i]] = dTwi[i]
-                    dict_df[target]["HeatCoeff"][p_params["hwH"][i]] = [round(hi[i], 3)]
-                    dict_df[target]["DT"][p_params["dTwH"][i]] = [round(dTwi[i], 3)]
-                    dict_df[target]["Uw"][p_params["dTwH"][i].replace("dTw", "Uw")] = [
-                        round(U, 3)
-                    ]
-                    dict_df[target]["cf"][p_params["dTwH"][i].replace("dTw", "cf")] = [
-                        cf
-                    ]
+                    parameters[p_params["hwH"][i]] = hi[i]
+                dict_df[target]["HeatCoeff"]["hw_" + cname] = [round(hi[i], 3)]
+                dict_df[target]["DT"]["dTw_" + cname] = [round(dTwi[i], 3)]
+                dict_df[target]["Uw"]["Uw_" + cname] = [round(U, 3)]
+                dict_df[target]["cf"]["cf_" + cname] = [cf]
 
-                    error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
-                    error_h.append(abs(1 - (hwH[i] / hi[i])))
-
-                    print(
-                        f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d:.3e}, Sh={s:.3e}, Power={PowerCh:.3f}, TwH={TwH[i]:.3f}, dTwH={dTwH[i]:.3f}, hwH={hwH[i]:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}",
-                        flush=True,
-                    )
-
-                    VolMass[i] = rho(TwH[i] + dTwi[i] / 2.0, Pressure)
-                    SpecHeat[i] = Cp(TwH[i] + dTwi[i] / 2.0, Pressure)
+                error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
+                error_h.append(abs(1 - (tmp_hi_old / hi[i])))
 
                 print(
-                    f"Flow={flow.flow(abs(objectif)):.3f}, Sum(Qh)={sum(Q):.3f}, Sum(Sh)={sum(Sh):.3e}",
+                    f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d:.3e}, Sh={s:.3e}, Q={Q[i]:.3f}, Power={PowerCh:.3f}, TwH={tmp_Twh:.3f}, dTwH={dTwH[i]:.3f}, hwH={tmp_hi_old:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}",
                     flush=True,
                 )
 
-                # TODO compute an estimate of dTg
-                # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
-                Tout = getTout(Ti, VolMass, SpecHeat, Q)
-                VolMassout = rho(Tout, Pressure)
-                SpecHeatout = Cp(Tout, Pressure)
-                Qout = Umean * sum(Sh)
+                if FluxZ is not None:
+                    csvfile = TwH[i]["filename"].replace("$cfgdir", basedir)
+                    if e.isMasterRank():
+                        # print(f"write {csvfile}")
+                        Tw_data.to_csv(csvfile, index=False)
+                e.worldComm().barrier()
 
-                List_Tout.append(Tout)
-                List_VolMassout.append(VolMassout)
-                List_SpecHeatout.append(SpecHeatout)
-                List_Qout.append(Qout)
+                VolMass[i] = rho(tmp_Twh + dTwi[i] / 2.0, Pressure)
+                SpecHeat[i] = Cp(tmp_Twh + dTwi[i] / 2.0, Pressure)
 
-                dTg = Tout - TwH[0]
-                print(
-                    f"{target}: Tout={Tout:.3f}  Tw={TwH[0]:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f})",
-                    flush=True,
-                )
-                dict_df[target]["Tout"] = Tout
+            # TODO compute an estimate of dTg
+            # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
+            Tout = getTout(Ti, VolMass, SpecHeat, Q)
+            VolMassout = rho(Tout, Pressure)
+            SpecHeatout = Cp(Tout, Pressure)
+            Qout = Umean * sum(Sh)
+
+            List_Tout.append(Tout)
+            List_VolMassout.append(VolMassout)
+            List_SpecHeatout.append(SpecHeatout)
+            List_Qout.append(Qout)
+
+            dTg = Tout - Tw0
+            print(
+                f"{target}: Tout={Tout:.3f}  Tw={Tw0:.3f}, U={Umean:.3f}, Power={PowerM:.3f}, dTg={dTg:.3f} ({PowerM/(VolMass[0]*SpecHeat[0]*flow.flow(abs(objectif))):.3f}), Flow={flow.flow(abs(objectif)):.3f}, Sum(Qh)={sum(Q):.3f}",
+                flush=True,
+            )
+            dict_df[target]["Tout"] = Tout
 
         # global:  what to do when len(Tw) != 1
         else:
@@ -578,13 +505,12 @@ def compute_error(
                         f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}",
                         flush=True,
                     )
-                dTg = getDT(flow.flow(abs(objectif)), PowerM, Tw[i], dTw[i], Pressure)
+                dTg = getDT(flow.flow(abs(objectif)), PowerM, Tw[i], Pressure)
                 hg = getHeatCoeff(
                     Dh[i],
                     L[i],
                     Umean,
                     Tw[i] + dTg / 2.0,
-                    hw[i],
                     Pressure,
                     dPressure,
                     model=args.heatcorrelation,
