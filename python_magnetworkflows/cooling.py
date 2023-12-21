@@ -81,10 +81,18 @@ def Montgomery(
     Dh: meter
 
     see: Montgomery p38 eq 3.3 Watch out for Unit change
-    Montgomery formukq is given for Length==Centimeter, T in Celsius
+    Montgomery formula is given for Length==Centimeter, T in Celsius
     HMFL introduce an additional fuzzy factor
     """
-    h = 1426.404 * (1 + 1.5e-2 * (Tw - 273)) * exp(log(U) * 0.8) / exp(log(Dh) * 0.2)
+
+    fuzzy = 1.7
+    h = (
+        fuzzy
+        * 1426.404
+        * (1 + 1.5e-2 * (Tw - 273))
+        * exp(log(U) * 0.8)
+        / exp(log(Dh) * 0.2)
+    )
     # print(f"hcorrelation(Montgomery): h={h}")
     return h
 
@@ -329,15 +337,11 @@ def hcorrelation(
     return h
 
 
-def getDT(
-    flow: float, Power: float, Tw: float, dTw: float, P: float, relax: float = 0.0
-) -> float:
-    # compute dT as Power / rho *Cp * Flow(I)
-    DT = Power / (rho(Tw, P) * Cp(Tw, P) * flow)
-    # print(
-    #     f"getDT: DT={DT}, rho={rho(Tw, P)}, cp={Cp(Tw, P)}, flow={flow}, Power={Power}, Tw={Tw}, P={P}"
-    # )
-    return (1 - relax) * DT + relax * dTw
+def getDT(flow: float, Power: float, Tw: float, P: float) -> float:
+    """
+    compute dT as Power / rho *Cp * Flow(I)
+    """
+    return Power / (rho(Tw, P) * Cp(Tw, P) * flow)
 
 
 def getHeatCoeff(
@@ -345,12 +349,10 @@ def getHeatCoeff(
     L: float,
     U: float,
     Tw: float,
-    hw: float,
     Pw: float,
     dPw: float,
     model: str = "Montgomery",
     friction: str = "Constant",
-    relax: float = 0.0,
 ):
     correlation = {
         "Montgomery": Montgomery,
@@ -359,8 +361,7 @@ def getHeatCoeff(
         "Silverberg": Silverberg,
     }
 
-    h = correlation[model](Tw, Pw, dPw, U, Dh, L, friction)
-    return (1 - relax) * h + relax * hw
+    return correlation[model](Tw, Pw, dPw, U, Dh, L, friction)
 
 
 def getTout(
