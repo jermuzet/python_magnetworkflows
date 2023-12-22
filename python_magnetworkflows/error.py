@@ -10,6 +10,30 @@ from tabulate import tabulate
 import copy
 
 
+# sort (ref https://stackoverflow.com/questions/29580978/naturally-sorting-pandas-dataframe)
+def natsortdataframe(pd):
+    """
+    perform natsort on pandas dataframe
+
+    returns sorted dataframes
+    """
+    from natsort import natsorted
+
+    sorted_columns = natsorted(list(pd.columns))
+    return pd[sorted_columns]
+
+
+def natsortlist(list_):
+    """
+    perform natsort on list
+
+    returns sorted list
+    """
+    from natsort import natsorted
+
+    return natsorted(list_)
+
+
 def compute_error(
     e,
     f,
@@ -151,6 +175,38 @@ def compute_error(
                         {f"{name}": param}, name, e, args.debug
                     )
 
+        # perform natsort on dataframe and list
+        for key, values_ in dict_df[target].items():
+            msg = f"dict_df[target]: key={key}, values={type(values_)}"
+            if isinstance(values_, dict):
+                msg += " dict"
+                # print(f"dict_df[target][{key}]={values_}")
+                # sorted dict by keys??
+            if isinstance(values_, list):
+                if values_:
+                    msg += f", list={type(values_[0])}  sorted"
+                    # print(f"p_params[{key}]={values_}")
+                    # sorted list??
+                    dict_df[target][key] = natsortlist(values_)
+                else:
+                    msg += f", list=empty"
+            if isinstance(values_, pd.core.frame.DataFrame):
+                msg += " dataframe sorted"
+                # sorted??
+                dict_df[target][key] = natsortdataframe(values_)
+            print(msg, flush=True)
+
+        for key, values_ in p_params.items():
+            msg = f"p_params: key={key}, values={type(values_)}"
+            if isinstance(values_, list):
+                if values_:
+                    msg += f", list={type(values_[0])} sorted"
+                    # print(f"p_params[{key}]={values_}")
+                    p_params[key] = natsortlist(values_)
+                else:
+                    msg += f", list=empty"
+            print(msg, flush=True)
+
         if args.debug:
             print(f"PowerM: {dict_df[target]['PowerM']}", flush=True)
             print(f"PowerH: {dict_df[target]['PowerH']}", flush=True)
@@ -160,19 +216,12 @@ def compute_error(
         SPower_H = dict_df[target]["PowerH"].iloc[-1].sum()
         SFlux_H = dict_df[target]["Flux"].iloc[-1].sum()
 
-        # sort (ref https://stackoverflow.com/questions/29580978/naturally-sorting-pandas-dataframe)
-        from natsort import natsorted
-
-        tutu = dict_df[target]["Flux"]
-        sorted_columns = natsorted(list(dict_df[target]["Flux"].columns))
-        # print(f"with natsort: {sorted_columns}")
-        tutu = dict_df[target]["Flux"][sorted_columns]
-        # print(f"tutu: {tutu}")
-
+        # print(f'Flux: {type(dict_df[target]["Flux"])}')
+        sortedflux = dict_df[target]["Flux"]
         t_headers = ["Part", "Flux[MW]"]
-        t_parts = tutu.columns.values.tolist()
-        # t_power = tutu.iloc[-1]
-        t_power = [f"{s/1.e+6:.3f}" for s in tutu.iloc[-1].tolist()]
+        t_parts = sortedflux.columns.values.tolist()
+        # t_power = sortedflux.iloc[-1]
+        t_power = [f"{s/1.e+6:.3f}" for s in sortedflux.iloc[-1].tolist()]
         # print(type(t_power.tolist()))
         print(
             tabulate(list(zip(t_parts, t_power)), headers=t_headers),
@@ -195,10 +244,6 @@ def compute_error(
             tabulate(list(zip(t_parts, t_power, t_U)), headers=t_headers),
             flush=True,
         )
-        # print(
-        #    f'PowerH=\n{dict_df[target]["PowerH"].iloc[-1]} \nUcoil=\n{dict_df[target]["PowerH"].iloc[-1]/dict_df[target]["target"]}',
-        #    flush=True,
-        # )
 
         if args.debug:
             print("PowerM : ", dict_df[target]["PowerM"], flush=True)
@@ -213,18 +258,8 @@ def compute_error(
         if PowerFlux_Diff / PowerM > 1.0e-3:
             return f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM:.3f} SFlux_H={SFlux_H:.3f}"
 
-        # assert (
-        #    PowerFlux_Diff / PowerM < 1e-1
-        # ), f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM:.3f} SFlux_H={SFlux_H:.3f}"
-        # assert (
-        #    Powers_Diff / PowerM < 1e-3
-        # ), f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM:.3f} SPower_H={SPower_H:.3f}"
-        # assert (
-        #    PowerFlux_Diff / PowerM < 1e-1
-        # ), f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM:.3f} SFlux_H={SFlux_H:.3f}"
-
         # get dict_df[target]["Flux"] column names
-        for i, cname in enumerate(dict_df[target]["Flux"].columns.values.tolist()):
+        for i, cname in enumerate(sortedflux.columns.values.tolist()):
             flux = dict_df[target]["Flux"][cname].iloc[-1]
             print(f"{target} Channel{i} Flux[cname={cname}]: {flux:.3f}")
 
