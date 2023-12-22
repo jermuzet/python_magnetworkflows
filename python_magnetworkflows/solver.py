@@ -1,4 +1,4 @@
-from typing import List
+from typing import Optional
 
 import re
 import os
@@ -66,7 +66,7 @@ def create_field(
             print(f"create_field: {field} done (wd={wd})", flush=True)
 
 
-def init_field(e, jsonmodel: str, meshmodel: str):
+def init_field(e, jsonmodel: str, meshmodel: str, dimension: int):
     """
     create and save a field in h5"""
     if e.isMasterRank():
@@ -76,7 +76,7 @@ def init_field(e, jsonmodel: str, meshmodel: str):
     with open(jsonmodel, "r") as file:
         data = json.load(file)
 
-    m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
+    m2d = fpp.load(fpp.mesh(dim=dimension), name=meshmodel, verbose=1)
 
     fnames = {}
     # cfpdes: from data["Models"]
@@ -87,7 +87,6 @@ def init_field(e, jsonmodel: str, meshmodel: str):
                     basis = value["basis"]
                     # split basis into Space + order:
                     split = re.split(r"(\d+)", basis)
-                    m2d = fpp.load(fpp.mesh(dim=2), name=meshmodel, verbose=1)
                     Xh = fpp.functionSpace(
                         space=split[0], mesh=m2d, order=int(split[1])
                     )
@@ -124,40 +123,48 @@ def update(e, jsonmodel: str, parameters: dict):
         dict_json = json.loads(jsonfile.read())
         dict_json["Parameters"] = parameters
 
-    e.worldComm().barrier()
     if e.isMasterRank():
         with open(jsonmodel, "w+") as jsonfile:
             jsonfile.write(json.dumps(dict_json, indent=4))
             print(f"update {jsonmodel}", flush=True)
+    e.worldComm().barrier()
 
     return 0
 
 
 # TODO create toolboxes_options on the fly
-def init(fname, e, args, pwd: str, jsonmodel: str, meshmodel: str, directory: str = ""):
+def init(
+    fname,
+    args,
+    pwd: str,
+    jsonmodel: str,
+    meshmodel: str,
+    directory: Optional[str] = None,
+    dimension: Optional[int] = 2,
+):
     """
     init feelp env and feelpp problem
     """
 
     # pwd = os.getcwd()
-    if not e:
-        e = fpp.Environment(
-            [f"{fname}.py"],
-            opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
-            config=fpp.localRepository(directory),
-        )
-        if e.isMasterRank():
-            print(f"init: feelpp env created (pwd={pwd}, cwd={os.getcwd()})")
-
-    fields = init_field(e, f"{pwd}/{jsonmodel}", f"{pwd}/{meshmodel}")
+    # if not e:
+    e = fpp.Environment(
+        [f"{fname}.py"],
+        opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
+        config=fpp.localRepository(directory),
+    )
     if e.isMasterRank():
-        print(f"init: fields={fields}", flush=True)
+        print(f"Init: feelpp env created (pwd={pwd}, cwd={os.getcwd()})", flush=True)
+
+    fields = init_field(e, f"{pwd}/{jsonmodel}", f"{pwd}/{meshmodel}", dimension)
+    if e.isMasterRank():
+        print(f"Init: fields={fields}", flush=True)
 
     e.setConfigFile(args.cfgfile)
     if e.isMasterRank():
-        print(f"init: setconfigfile", flush=True)
+        print(f"Init: setconfigfile", flush=True)
 
-    f = cfpdes.cfpdes(dim=2)
+    f = cfpdes.cfpdes(dim=dimension)
     if e.isMasterRank():
         print("Create cfpdes done", flush=True)
 
@@ -196,12 +203,14 @@ def solve(
 
     basedir = os.path.dirname(jsonmodel)  # get absolute path instead??
 
+    """
     if e is None:
         (e, f, fields) = init(
             fname, e, args, "", jsonmodel, meshmodel, directory=feelpp_directory
         )
         if e.isMasterRank():
             print("solve: load cfg", flush=True)
+    """
 
     if e.isMasterRank():
         print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}", flush=True)

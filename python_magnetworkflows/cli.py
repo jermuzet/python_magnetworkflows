@@ -530,12 +530,17 @@ def main():
     # units = load_units('meter')
 
     # Load cfg as config
+    dim = 0
     jsonmodel = ""
     meshmodel = ""
     feelpp_config = configparser.ConfigParser()
     basedir = None
     with open(args.cfgfile, "r") as inputcfg:
         feelpp_config.read_string("[DEFAULT]\n[main]\n" + inputcfg.read())
+        if "case" in feelpp_config:
+            dim = feelpp_config["case"]["dimension"]
+        else:
+            dim = feelpp_config["main"]["case.dimension"]
         feelpp_directory = feelpp_config["main"]["directory"]
 
         basedir = os.path.dirname(args.cfgfile)
@@ -554,15 +559,21 @@ def main():
         dict_json = json.loads(jsonfile.read())
         parameters = dict_json["Parameters"]
 
-    e = None
     (e, f, fields) = init(
-        fname, e, args, pwd, jsonmodel, meshmodel, directory=feelpp_directory
+        fname,
+        args,
+        pwd,
+        jsonmodel,
+        meshmodel,
+        directory=feelpp_directory,
+        dimension=dim,
     )
 
     if e.isMasterRank():
         print(args)
         print(f"cwd: {pwd}")
         print(f"feelpp_directory={feelpp_directory}")
+        print(f"dim={dim}")
         print(f"basedir={basedir}")
         print(f"jsonmodel={jsonmodel}")
         print(f"meshmodel={meshmodel}")
@@ -570,7 +581,8 @@ def main():
     targets = {}
     postvalues = {}
 
-    # args.mdata = currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
+    # args.mdata =
+    #  currents:  {magnet.name: {'value': current.value, 'type': magnet.type, 'filter': '', 'flow_params': args.flow_params}}
     if args.mdata:
         targets, postvalues = loadMdata(e, pwd, args, targets, postvalues)
 
