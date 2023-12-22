@@ -34,7 +34,7 @@ def main():
         metavar="coolings",
         type=str,
         choices=["mean", "meanH", "grad", "gradH", "gradHZ"],
-        default=["mean", "meanH", "grad", "gradH"],
+        default=["mean", "meanH", "grad", "gradH", "gradHZ"],
     )
     parser.add_argument(
         "--hcorrelations",
@@ -43,7 +43,7 @@ def main():
         metavar="hcorrelations",
         type=str,
         choices=["Montgomery", "Dittus", "Colburn", "Silverberg"],
-        default=["Montgomery", "Dittus", "Colburn", "Silverberg"],
+        default=["Montgomery"],
     )
     parser.add_argument(
         "--frictions",
@@ -52,7 +52,13 @@ def main():
         metavar="frictions",
         type=str,
         choices=["Constant", "Blasius", "Filonenko", "Colebrook", "Swanee"],
-        default=["Constant", "Blasius", "Filonenko", "Colebrook", "Swanee"],
+        default=["Constant"],
+    )
+    parser.add_argument(
+        "--itermax",
+        help="specify maximum iteration (default: 10)",
+        type=int,
+        default=100,
     )
     parser.add_argument("--debug", help="activate debug", action="store_true")
     args = parser.parse_args()
@@ -98,8 +104,11 @@ def main():
                     f.write(
                         f"perl -pi -e 's|directory=.*|directory={feelpp_directory[0]}/{feelpp_directory[1]}/{cooling}/{heatcorrelation}/{friction}|' {basedir}/{cooling}/{cfgfile};\n"
                     )
+                    commandline = f"mpirun -np {args.np} python -m python_magnetworkflows.{args.type} --mdata '{args.mdata}' {basedir}/{cooling}/{cfgfile} --reloadcfg --cooling {cooling} --heatcorrelation {heatcorrelation} --friction {friction} --itermax {args.itermax}"
+                    if args.debug:
+                        commandline = commandline + " --debug "
                     f.write(
-                        f"mpirun -np {args.np} python -m python_magnetworkflows.{args.type} --mdata '{args.mdata}' {basedir}/{cooling}/{cfgfile} --reloadcfg --cooling {cooling} --heatcorrelation {heatcorrelation} --friction {friction} --itermax 50 > {basedir}/{cooling}/{cooling}_{heatcorrelation}_{friction}.log 2>&1;\n\n"
+                        f"{commandline} > {basedir}/{cooling}/{cooling}_{heatcorrelation}_{friction}.log 2>&1;\n\n"
                     )
 
     if not args.debug:
