@@ -234,7 +234,6 @@ def compute_error(
             Umean * sum(Sh),
             PowerM,
             290.75,
-            0,
             Pressure,
         )
         print(
@@ -338,13 +337,14 @@ def compute_error(
                     while True:
                         tmp_flow = U * s
 
-                        dT_Ch = getDT(
-                            tmp_flow,
-                            PowerCh,
-                            (_old[0] + _old[-1]) / 2.0,
-                            0,
-                            Pressure,
-                        )
+                        ### useful ?
+                        # dT_Ch = getDT(
+                        #     tmp_flow,
+                        #     PowerCh,
+                        #     (_old[0] + _old[-1]) / 2.0,
+                        #     0,
+                        #     Pressure,
+                        # )
                         _new = copy.deepcopy(_old)
                         if args.debug:
                             print(f"gradHZ: {cname} _old: {_old}")
@@ -354,28 +354,28 @@ def compute_error(
                                 tmp_flow,
                                 flux,
                                 (_old[k] + _old[k + 1]) / 2.0,
-                                0,
                                 Pressure,
                             )
 
                             print(
-                                f"gradHZ: {cname} {key_dz[k]} - flow={tmp_flow:.3f}, power={flux:.3f}, Tw={_old[k]:.3f}, dTw={dT_old:.3f}, P={Pressure:.3f}, dT={dT_new:.3f}, dTch={dT_Ch:.3f}"
+                                f"gradHZ: {cname} {key_dz[k]} - flow={tmp_flow:.3f}, power={flux:.3f}, Tw={_old[k]:.3f}, dTw={dT_old:.3f}, P={Pressure:.3f}, dT={dT_new:.3f}"  # , dTch={dT_Ch:.3f}"
                             )
                             _new[k + 1] = _new[k] + dT_new
 
-                        # print(f"_new: {_new}, relax={relax}")
-                        for k in range(section):
-                            # print(f's={s}, {1-relax} * {_new[s]} + {relax} * {_old[s]}')
-                            _new[k] = (1 - relax) * _new[k] + relax * _old[k]
-                        print(f"gradHZ: {cname} _new (after relax={relax}): {_new}")
+                        ### old relaxation for gradHZ
+                        # # print(f"_new: {_new}, relax={relax}")
+                        # for k in range(section):
+                        #     # print(f's={s}, {1-relax} * {_new[s]} + {relax} * {_old[s]}')
+                        #     _new[k] = (1 - relax) * _new[k] + relax * _old[k]
+                        # print(f"gradHZ: {cname} _new (after relax={relax}): {_new}")
 
-                        dTwi[i] = _new[-1] - _new[0]
+                        tmp_dTwi = _new[-1] - _new[0]
+
                         tmp_hi = getHeatCoeff(
                             d,
                             Lh[i],
                             U,
-                            _new[0] + dTwi[-1] / 2.0,
-                            hwH[i],
+                            _new[0] + tmp_dTwi / 2.0,
                             Pressure,
                             dPressure,
                             model=args.heatcorrelation,
@@ -383,7 +383,7 @@ def compute_error(
                         )
 
                         tmp_U, cf = Uw(
-                            _new[0] + dTwi[-1] / 2.0,
+                            _new[0] + tmp_dTwi / 2.0,
                             Pressure,
                             dPressure,
                             d,
@@ -404,6 +404,7 @@ def compute_error(
                         _old = copy.deepcopy(_new)
 
                     Q[i] = tmp_flow
+                    dTwi[i] = (1.0 - relax) * tmp_dTwi + relax * dTwH[i]
                     hi[i] = (1.0 - relax) * tmp_hi + relax * hwH[i]
 
                     # save back to csv: T_z.to_csv(f"Tw_{cname}.csv", index=False)
@@ -441,6 +442,7 @@ def compute_error(
                     f"Flow={flow.flow(abs(objectif)):.3f}, Sum(Qh)={sum(Q):.3f}, Sum(Sh)={sum(Sh):.3e}",
                     flush=True,
                 )
+                dict_df[target]["flow"] = sum(Q)
 
                 # compute an estimate of dTg
                 Tout = getTout(Ti, VolMass, SpecHeat, Q)
@@ -476,14 +478,13 @@ def compute_error(
 
                     while True:
                         tmp_flow = U * s
-                        tmp_dTwi = getDT(tmp_flow, PowerCh, TwH[i], dTwH[i], Pressure)
+                        tmp_dTwi = getDT(tmp_flow, PowerCh, TwH[i], Pressure)
 
                         tmp_hi = getHeatCoeff(
                             d,
                             Lh[i],
                             U,
                             TwH[i] + tmp_dTwi / 2.0,
-                            hwH[i],
                             Pressure,
                             dPressure,
                             model=args.heatcorrelation,
@@ -542,6 +543,7 @@ def compute_error(
                     f"Flow={flow.flow(abs(objectif)):.3f}, Sum(Qh)={sum(Q):.3f}, Sum(Sh)={sum(Sh):.3e}",
                     flush=True,
                 )
+                dict_df[target]["flow"] = sum(Q)
 
                 # TODO compute an estimate of dTg
                 # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
@@ -578,13 +580,12 @@ def compute_error(
                         f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}",
                         flush=True,
                     )
-                dTg = getDT(flow.flow(abs(objectif)), PowerM, Tw[i], dTw[i], Pressure)
+                dTg = getDT(flow.flow(abs(objectif)), PowerM, Tw[i], Pressure)
                 hg = getHeatCoeff(
                     Dh[i],
                     L[i],
                     Umean,
                     Tw[i] + dTg / 2.0,
-                    hw[i],
                     Pressure,
                     dPressure,
                     model=args.heatcorrelation,

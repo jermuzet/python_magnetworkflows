@@ -329,15 +329,13 @@ def hcorrelation(
     return h
 
 
-def getDT(
-    flow: float, Power: float, Tw: float, dTw: float, P: float, relax: float = 0.0
-) -> float:
+def getDT(flow: float, Power: float, Tw: float, P: float) -> float:
     # compute dT as Power / rho *Cp * Flow(I)
     DT = Power / (rho(Tw, P) * Cp(Tw, P) * flow)
     # print(
     #     f"getDT: DT={DT}, rho={rho(Tw, P)}, cp={Cp(Tw, P)}, flow={flow}, Power={Power}, Tw={Tw}, P={P}"
     # )
-    return (1 - relax) * DT + relax * dTw
+    return DT
 
 
 def getHeatCoeff(
@@ -345,12 +343,10 @@ def getHeatCoeff(
     L: float,
     U: float,
     Tw: float,
-    hw: float,
     Pw: float,
     dPw: float,
     model: str = "Montgomery",
     friction: str = "Constant",
-    relax: float = 0.0,
 ):
     correlation = {
         "Montgomery": Montgomery,
@@ -360,7 +356,7 @@ def getHeatCoeff(
     }
 
     h = correlation[model](Tw, Pw, dPw, U, Dh, L, friction)
-    return (1 - relax) * h + relax * hw
+    return h
 
 
 def getTout(
