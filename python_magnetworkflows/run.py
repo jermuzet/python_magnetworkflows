@@ -3,10 +3,6 @@ import os
 import argparse
 import configparser
 
-import pandas as pd
-import json
-import re
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -111,9 +107,8 @@ def main():
                         f"{commandline} > {basedir}/{cooling}/{cooling}_{heatcorrelation}_{friction}.log 2>&1;\n\n"
                     )
 
+    os.system(f"sh {basedir}/run_{args.type}_matrix.sh")
     if not args.debug:
-        os.system(f"sh {basedir}/run_{args.type}_matrix.sh")
-
         os.remove(f"{basedir}/run_{args.type}_matrix.sh")
 
     return 0
