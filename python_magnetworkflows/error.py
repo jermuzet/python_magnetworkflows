@@ -394,38 +394,38 @@ def compute_error(
                     tmp_dTwi = getDT(
                         tmp_flow, PowerCh, tmp_Twh + tmp_dTwi / 2.0, Pressure
                     )
-
-                    for k, flux in enumerate(FluxCh_dz):
-                        Pw = Pressure - dPressure * (zsections[k] - zsections[0]) / (
-                            zsections[-1] - zsections[0]
-                        )
-                        dTw_z = getDT(
-                            tmp_flow,
-                            flux,
-                            (Tw_z_old[k] + Tw_z_old[k + 1]) / 2.0,
-                            Pw,
-                        )
-                        Tw_z[k + 1] = Tw_z[k] + dTw_z
-
-                    for k in range(len(Tw_z)):
-                        Pw = Pressure - dPressure * (zsections[k] - zsections[0]) / (
-                            zsections[-1] - zsections[0]
-                        )
-                        hw_z[k] = getHeatCoeff(
-                            d,
-                            Lh[i],
-                            U,
-                            Tw_z[k],
-                            Pressure,
-                            dPressure,
-                            model=args.heatcorrelation,
-                            friction=args.friction,
-                        )
-                        if e.isMasterRank():
-                            print(
-                                f"Tw_z[{k}]={Tw_z[k]}, _h={hw_z[k]}, Pw={Pw}, Pressure={Pressure}, dP={dPressure}",
-                                flush=True,
+                    if FluxZ is not None:
+                        for k, flux in enumerate(FluxCh_dz):
+                            Pw = Pressure - dPressure * (
+                                zsections[k] - zsections[0]
+                            ) / (zsections[-1] - zsections[0])
+                            dTw_z = getDT(
+                                tmp_flow,
+                                flux,
+                                (Tw_z_old[k] + Tw_z_old[k + 1]) / 2.0,
+                                Pw,
                             )
+                            Tw_z[k + 1] = Tw_z[k] + dTw_z
+
+                        for k in range(len(Tw_z)):
+                            Pw = Pressure - dPressure * (
+                                zsections[k] - zsections[0]
+                            ) / (zsections[-1] - zsections[0])
+                            hw_z[k] = getHeatCoeff(
+                                d,
+                                Lh[i],
+                                U,
+                                Tw_z[k],
+                                Pressure,
+                                dPressure,
+                                model=args.heatcorrelation,
+                                friction=args.friction,
+                            )
+                            if e.isMasterRank():
+                                print(
+                                    f"Tw_z[{k}]={Tw_z[k]}, _h={hw_z[k]}, Pw={Pw}, Pressure={Pressure}, dP={dPressure}",
+                                    flush=True,
+                                )
 
                     tmp_hi = getHeatCoeff(
                         d,
@@ -454,9 +454,12 @@ def compute_error(
                             flush=True,
                         )
                     U = tmp_U
-                    dTwH[i] = Tw_z_old[-1] - Tw_z_old[0]
-                    Tw_z_old = Tw_z
-                    hw_z_old = hw_z
+                    if FluxZ is not None:
+                        dTwH[i] = Tw_z_old[-1] - Tw_z_old[0]
+                        Tw_z_old = Tw_z
+                        hw_z_old = hw_z
+                    # else:
+                    #     dTwH[i] = tmp_Twh
 
                     if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
                         break
