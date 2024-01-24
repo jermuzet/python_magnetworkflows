@@ -66,8 +66,10 @@ def main():
         dict_json = json.loads(jsonfile.read())
         parameters = dict_json["Parameters"]
 
+    e = None
     (e, f, fields) = init(
         fname,
+        e,
         args,
         pwd,
         jsonmodel,
@@ -206,6 +208,7 @@ def main():
         if Commissioning:
             (e, f, fields) = init(
                 fname,
+                e,
                 args,
                 pwd,
                 jsonmodel,

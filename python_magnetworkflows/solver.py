@@ -135,6 +135,7 @@ def update(e, jsonmodel: str, parameters: dict):
 # TODO create toolboxes_options on the fly
 def init(
     fname,
+    e,
     args,
     pwd: str,
     jsonmodel: str,
@@ -147,14 +148,16 @@ def init(
     """
 
     # pwd = os.getcwd()
-    # if not e:
-    e = fpp.Environment(
-        [f"{fname}.py"],
-        opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
-        config=fpp.localRepository(directory),
-    )
-    if e.isMasterRank():
-        print(f"Init: feelpp env created (pwd={pwd}, cwd={os.getcwd()})", flush=True)
+    if not e:
+        e = fpp.Environment(
+            [f"{fname}.py"],
+            opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
+            config=fpp.localRepository(directory),
+        )
+        if e.isMasterRank():
+            print(
+                f"Init: feelpp env created (pwd={pwd}, cwd={os.getcwd()})", flush=True
+            )
 
     fields = init_field(e, f"{pwd}/{jsonmodel}", f"{pwd}/{meshmodel}", dimension)
     if e.isMasterRank():
