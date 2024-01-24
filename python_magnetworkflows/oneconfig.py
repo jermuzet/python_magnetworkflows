@@ -78,6 +78,7 @@ def oneconfig(
             "flow": 0,
             "Tout": 0,
             "Uw": pd.DataFrame(),
+            "L": float(values["inductance"]),
         }
 
     # capture actual params per target:

@@ -186,7 +186,6 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
             targets[f"{filter}I"] = {
                 "objectif": values["value"],
                 "type": "helix",
-                "relax": values["relax"],
                 "csv": "heat.measures/values.csv",
                 "rematch": f"Statistics_Intensity_{filter}H\\w+_integrate",
                 "params": [("N", f"N_{filter}\\w+")],
@@ -317,7 +316,6 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
             targets[f"{filter}I"] = {
                 "objectif": values["value"],
                 "type": "bitter",
-                "relax": values["relax"],
                 "csv": "heat.measures/values.csv",
                 "rematch": f"Statistics_Intensity_{filter}\\w+_integrate",
                 "params": [("N", f"N_{filter}\\w+")],
@@ -340,6 +338,14 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
                 }
                 targets[f"{filter}I"]["computed_params"].append(FluxZ)
 
+        targets[f"{filter}I"]["relax"] = 0
+        if "relax" in values:
+            targets[f"{filter}I"]["relax"] = values["relax"]
+
+        targets[f"{filter}I"]["inductance"] = 0
+        if "inductance" in values:
+            targets[f"{filter}I"]["inductance"] = values["inductance"]
+
         postvalues[f"{filter}I"] = {
             "statsT": [MinT, MeanT, MaxT],
             "statsTH": [MinTH, MeanTH, MaxTH],
@@ -357,6 +363,8 @@ def exportResults(
     global_df=None,
     suffix: str = None,
 ):
+    sumLI2 = 0
+    productI = 1
     for target, values in dict_df.items():
         mname = target[:-2]
         prefix = ""
@@ -366,6 +374,9 @@ def exportResults(
         table_final[f"{prefix}I[A]"] = dict_df[target]["target"]
         table_final[f"{prefix}flow[l/s]"] = dict_df[target]["flow"] * 1e3
         table_final[f"{prefix}Tout[K]"] = dict_df[target]["Tout"]
+
+        sumLI2 += dict_df[target]["L"] * dict_df[target]["target"] ** 2
+        productI *= dict_df[target]["target"]
 
         print("\n")
         for key, df in values.items():
@@ -499,6 +510,16 @@ def exportResults(
     if "mag" in args.cfgfile:
         df = pd.read_csv("magnetic.measures/values.csv")
         table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
+        if len(dict_df) == 1:
+            table_final["L[H]"] = (
+                2
+                * df["Statistics_MagneticEnergy_integrate"].iloc[-1]
+                / (dict_df[target]["target"] ** 2)
+            )
+        else:
+            table_final["M[H]"] = (
+                df["Statistics_MagneticEnergy_integrate"].iloc[-1] - sumLI2 / 2
+            ) / productI
 
     table_final.set_index("measures", inplace=True)
     if suffix is None:
