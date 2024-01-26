@@ -458,8 +458,6 @@ def compute_error(
                         dTwH[i] = Tw_z_old[-1] - Tw_z_old[0]
                         Tw_z_old = Tw_z
                         hw_z_old = hw_z
-                    # else:
-                    #     dTwH[i] = tmp_Twh
 
                     if abs(1 - n_tmp_flow / tmp_flow) <= 1.0e-3:
                         break
