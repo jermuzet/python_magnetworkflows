@@ -45,9 +45,9 @@ def main():
     with open(args.cfgfile, "r") as inputcfg:
         feelpp_config.read_string("[DEFAULT]\n[main]\n" + inputcfg.read())
         if "case" in feelpp_config:
-            dim = feelpp_config["case"]["dimension"]
+            dim = int(feelpp_config["case"]["dimension"])
         else:
-            dim = feelpp_config["main"]["case.dimension"]
+            dim = int(feelpp_config["main"]["case.dimension"])
         feelpp_directory = feelpp_config["main"]["directory"]
 
         basedir = os.path.dirname(args.cfgfile)
@@ -111,6 +111,13 @@ def main():
             global_df[filter[:-1]]["FluxZ"] = pd.DataFrame()
         if "H" in args.cooling:
             global_df[filter[:-1]]["cf"] = pd.DataFrame()
+        if "thmagel" in args.cfgfile:
+            global_df[filter[:-1]]["statsDispl"] = pd.DataFrame()
+            global_df[filter[:-1]]["statsStress"] = pd.DataFrame()
+            global_df[filter[:-1]]["statsVonMises"] = pd.DataFrame()
+            global_df[filter[:-1]]["statsDisplH"] = pd.DataFrame()
+            global_df[filter[:-1]]["statsStressH"] = pd.DataFrame()
+            global_df[filter[:-1]]["statsVonMisesH"] = pd.DataFrame()
 
         if "steplist" in values:
             step_i[mname] = 0

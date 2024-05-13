@@ -10,6 +10,9 @@ import configparser
 import pandas as pd
 import json
 import re
+from warnings import simplefilter
+
+simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 from natsort import natsorted
 
@@ -208,6 +211,170 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
                 }
                 targets[f"{filter}I"]["computed_params"].append(FluxZ)
 
+            if "thmagel" in args.cfgfile:
+                MinDispl = {
+                    "name": "MinDispl",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Displ_{filter}\\w*min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "m",
+                    "post": {"type": "Statistics_Stat_Displ", "math": "min"},
+                }
+                # MeanDispl = {
+                #     "name": "MeanDispl",
+                #     "csv": "elastic.measures/values.csv",
+                #     "rematch": f"Statistics_Stat_Displ_{filter}\\w*mean",
+                #     "params": [],
+                #     "control_params": [],
+                #     "unit": "m",
+                #     "post": {"type": "Statistics_Stat_Displ", "math": "mean"},
+                # }
+                MaxDispl = {
+                    "name": "MaxDispl",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Displ_{filter}\\w*max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "m",
+                    "post": {"type": "Statistics_Stat_Displ", "math": "max"},
+                }
+                MinStress = {
+                    "name": "MinStress",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Stress_{filter}\\w*min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_Stress", "math": "min"},
+                }
+                MeanStress = {
+                    "name": "MeanStress",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Stress_{filter}\\w*mean",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_Stress", "math": "mean"},
+                }
+                MaxStress = {
+                    "name": "MaxStress",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Stress_{filter}\\w*max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_Stress", "math": "max"},
+                }
+                MinVonMises = {
+                    "name": "MinVonMises",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_VonMises_{filter}\\w*min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_VonMises", "math": "min"},
+                }
+                MeanVonMises = {
+                    "name": "MeanVonMises",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_VonMises_{filter}\\w*mean",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_VonMises", "math": "mean"},
+                }
+                MaxVonMises = {
+                    "name": "MaxVonMises",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_VonMises_{filter}\\w*max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_VonMises", "math": "max"},
+                }
+                MinDisplH = {
+                    "name": "MinDisplH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Displ_{filter}\\w+\\d+_min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "m",
+                    "post": {"type": "Statistics_Displ", "math": "min"},
+                }
+                # MeanDisplH = {
+                #     "name": "MeanDisplH",
+                #     "csv": "elastic.measures/values.csv",
+                #     "rematch": f"Statistics_Displ_{filter}\\w+\\d+_mean",
+                #     "params": [],
+                #     "control_params": [],
+                #     "unit": "m",
+                #     "post": {"type": "Statistics_Displ", "math": "mean"},
+                # }
+                MaxDisplH = {
+                    "name": "MaxDisplH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Displ_{filter}\\w+\\d+_max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "m",
+                    "post": {"type": "Statistics_Displ", "math": "max"},
+                }
+                MinStressH = {
+                    "name": "MinStressH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stress_{filter}\\w+\\d+_min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stress", "math": "min"},
+                }
+                MeanStressH = {
+                    "name": "MeanStressH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stress_{filter}\\w+\\d+_mean",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stress", "math": "mean"},
+                }
+                MaxStressH = {
+                    "name": "MaxStressH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stress_{filter}\\w+\\d+_max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stress", "math": "max"},
+                }
+                MinVonMisesH = {
+                    "name": "MinVonMisesH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_VonMises_{filter}\\w+\\d+_min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_VonMises", "math": "min"},
+                }
+                MeanVonMisesH = {
+                    "name": "MeanVonMisesH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_VonMises_{filter}\\w+\\d+_mean",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_VonMises", "math": "mean"},
+                }
+                MaxVonMisesH = {
+                    "name": "MaxVonMisesH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_VonMises_{filter}\\w+\\d+_max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_VonMises", "math": "max"},
+                }
+
         if values["type"] == "bitter":
             # change rematch, params, control_params
             PowerM = {
@@ -338,6 +505,170 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
                 }
                 targets[f"{filter}I"]["computed_params"].append(FluxZ)
 
+            if "thmagel" in args.cfgfile:
+                MinDispl = {
+                    "name": "MinDispl",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Displ_{filter}\\w*min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "m",
+                    "post": {"type": "Statistics_Stat_Displ", "math": "min"},
+                }
+                # MeanDispl = {
+                #     "name": "MeanDispl",
+                #     "csv": "elastic.measures/values.csv",
+                #     "rematch": f"Statistics_Stat_Displ_{filter}\\w*mean",
+                #     "params": [],
+                #     "control_params": [],
+                #     "unit": "m",
+                #     "post": {"type": "Statistics_Stat_Displ", "math": "mean"},
+                # }
+                MaxDispl = {
+                    "name": "MaxDispl",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Displ_{filter}\\w*max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "m",
+                    "post": {"type": "Statistics_Stat_Displ", "math": "max"},
+                }
+                MinStress = {
+                    "name": "MinStress",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Stress_{filter}\\w*min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_Stress", "math": "min"},
+                }
+                MeanStress = {
+                    "name": "MeanStress",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Stress_{filter}\\w*mean",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_Stress", "math": "mean"},
+                }
+                MaxStress = {
+                    "name": "MaxStress",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_Stress_{filter}\\w*max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_Stress", "math": "max"},
+                }
+                MinVonMises = {
+                    "name": "MinVonMises",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_VonMises_{filter}\\w*min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_VonMises", "math": "min"},
+                }
+                MeanVonMises = {
+                    "name": "MeanVonMises",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_VonMises_{filter}\\w*mean",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_VonMises", "math": "mean"},
+                }
+                MaxVonMises = {
+                    "name": "MaxVonMises",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stat_VonMises_{filter}\\w*max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stat_VonMises", "math": "max"},
+                }
+                MinDisplH = {
+                    "name": "MinDisplH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Displ_{filter}\\w+_B\\D_min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "m",
+                    "post": {"type": "Statistics_Displ", "math": "min"},
+                }
+                # MeanDisplH = {
+                #     "name": "MeanDisplH",
+                #     "csv": "elastic.measures/values.csv",
+                #     "rematch": f"Statistics_Displ_{filter}\\w+_B\\D_mean",
+                #     "params": [],
+                #     "control_params": [],
+                #     "unit": "m",
+                #     "post": {"type": "Statistics_Displ", "math": "mean"},
+                # }
+                MaxDisplH = {
+                    "name": "MaxDisplH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Displ_{filter}\\w+_B\\D_max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "m",
+                    "post": {"type": "Statistics_Displ", "math": "max"},
+                }
+                MinStressH = {
+                    "name": "MinStressH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stress_{filter}\\w+_B\\D_min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stress", "math": "min"},
+                }
+                MeanStressH = {
+                    "name": "MeanStressH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stress_{filter}\\w+_B\\D_mean",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stress", "math": "mean"},
+                }
+                MaxStressH = {
+                    "name": "MaxStressH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_Stress_{filter}\\w+_B\\D_max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_Stress", "math": "max"},
+                }
+                MinVonMisesH = {
+                    "name": "MinVonMisesH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_VonMises_{filter}\\w+_B\\D_min",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_VonMises", "math": "min"},
+                }
+                MeanVonMisesH = {
+                    "name": "MeanVonMisesH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_VonMises_{filter}\\w+_B\\D_mean",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_VonMises", "math": "mean"},
+                }
+                MaxVonMisesH = {
+                    "name": "MaxVonMisesH",
+                    "csv": "elastic.measures/values.csv",
+                    "rematch": f"Statistics_VonMises_{filter}\\w+_B\\D_max",
+                    "params": [],
+                    "control_params": [],
+                    "unit": "Pa",
+                    "post": {"type": "Statistics_VonMises", "math": "max"},
+                }
+
         targets[f"{filter}I"]["relax"] = 0
         if "relax" in values:
             targets[f"{filter}I"]["relax"] = values["relax"]
@@ -350,6 +681,29 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
             "statsT": [MinT, MeanT, MaxT],
             "statsTH": [MinTH, MeanTH, MaxTH],
         }
+        if "thmagel" in args.cfgfile:
+            postvalues[f"{filter}I"]["statsDispl"] = [MinDispl, MaxDispl]
+            postvalues[f"{filter}I"]["statsStress"] = [MinStress, MeanStress, MaxStress]
+            postvalues[f"{filter}I"]["statsVonMises"] = [
+                MinVonMises,
+                MeanVonMises,
+                MaxVonMises,
+            ]
+            postvalues[f"{filter}I"]["statsDisplH"] = [
+                MinDisplH,
+                # MeanDisplH,
+                MaxDisplH,
+            ]
+            postvalues[f"{filter}I"]["statsStressH"] = [
+                MinStressH,
+                MeanStressH,
+                MaxStressH,
+            ]
+            postvalues[f"{filter}I"]["statsVonMisesH"] = [
+                MinVonMisesH,
+                MeanVonMisesH,
+                MaxVonMisesH,
+            ]
 
     return (targets, postvalues)
 
@@ -408,16 +762,22 @@ def exportResults(
                                 table_final[Uname] = columnData.iloc[-1]
 
                         else:
-                            table_final[
-                                f"{prefix}Ucoil_{columnName}[V]"
-                            ] = columnData.iloc[-1]
+                            table_final[f"{prefix}Ucoil_{columnName}[V]"] = (
+                                columnData.iloc[-1]
+                            )
 
-            if key in ["statsT", "statsTH"]:
+            if key in [
+                "statsT",
+                "statsTH",
+                "statsDispl",
+                "statsStress",
+                "statsDisplH",
+                "statsStressH",
+                "statsVonMises",
+                "statsVonMisesH",
+            ]:
                 list_dfT = [dfT for keyT, dfT in df.items()]
                 dfT = pd.concat(list_dfT, sort=True)
-                if key == "statsT":
-                    dfT.drop(columns=["max", "min", "mean"], inplace=True)
-
                 dfT_T = dfT.T
                 dfT_T = dfT_T.reindex(index=natsorted(dfT_T.index))
                 # in commisionning:
@@ -428,79 +788,106 @@ def exportResults(
                     os.makedirs(outdir, exist_ok=True)
                     dfT_T.to_csv(f"{outdir}/values.csv", index=True)
 
-                if key == "statsTH":
+                if key in [
+                    "statsTH",
+                    "statsDisplH",
+                    "statsStressH",
+                    "statsVonMisesH",
+                ]:
+                    symbol = key.replace("stats", "")
                     T_method = {
                         "Min": min,
                         "Max": max,
+                    }
+                    T_unit = {
+                        "statsTH": "K",
+                        "statsDisplH": "m",
+                        "statsStressH": "Pa",
+                        "statsVonMisesH": "Pa",
                     }
                     for columnName, columnData in dfT.items():
                         for T in ["Min", "Max"]:
                             if "H" in columnName:
                                 nH = int(columnName.split("H", 1)[1])
 
-                                Tname = f"{prefix}{T}TH_H{nH-1}H{nH}[K]"
+                                Tname = (
+                                    f"{prefix}{T}{symbol}_H{nH-1}H{nH}[{T_unit[key]}]"
+                                )
                                 if nH % 2:
-                                    Tname = f"{prefix}{T}TH_H{nH}H{nH+1}[K]"
+                                    Tname = f"{prefix}{T}{symbol}_H{nH}H{nH+1}[{T_unit[key]}]"
 
                                 if Tname in table_final.columns:
                                     table_final[Tname] = T_method[T](
                                         table_final[Tname].iloc[-1],
                                         dfT.loc[
-                                            f'{T}TH_I={dict_df[target]["target"]}A'
+                                            f'{T}{symbol}_I={dict_df[target]["target"]}A'
                                         ][columnName],
                                     )
                                 else:
                                     table_final[Tname] = dfT.loc[
-                                        f'{T}TH_I={dict_df[target]["target"]}A'
+                                        f'{T}{symbol}_I={dict_df[target]["target"]}A'
                                     ][columnName]
 
                             elif not re.search(r"_?R\d+", columnName):
-                                table_final[f"{prefix}{T}TH_{columnName}[K]"] = dfT.loc[
-                                    f'{T}TH_I={dict_df[target]["target"]}A'
-                                ][columnName]
+                                table_final[
+                                    f"{prefix}{T}{symbol}_{columnName}[{T_unit[key]}]"
+                                ] = dfT.loc[
+                                    f'{T}{symbol}_I={dict_df[target]["target"]}A'
+                                ][
+                                    columnName
+                                ]
+                        if symbol != "DisplH":
+                            if "H" in columnName:
+                                nH = int(columnName.split("H", 1)[1])
 
-                        if "H" in columnName:
-                            nH = int(columnName.split("H", 1)[1])
-
-                            Tname = f"{prefix}MeanTH_H{nH-1}H{nH}[K]"
-                            if nH % 2:
-                                Tname = f"{prefix}MeanTH_H{nH}H{nH+1}[K]"
-                                Area = (
-                                    parameters[f"Area_{prefix}H{nH}"]
-                                    + parameters[f"Area_{prefix}H{nH+1}"]
+                                Tname = (
+                                    f"{prefix}Mean{symbol}_H{nH-1}H{nH}[{T_unit[key]}]"
                                 )
-                            else:
-                                Area = (
-                                    parameters[f"Area_{prefix}H{nH-1}"]
-                                    + parameters[f"Area_{prefix}H{nH}"]
-                                )
+                                if nH % 2:
+                                    Tname = f"{prefix}Mean{symbol}_H{nH}H{nH+1}[{T_unit[key]}]"
+                                    Area = (
+                                        parameters[f"Area_{prefix}H{nH}"]
+                                        + parameters[f"Area_{prefix}H{nH+1}"]
+                                    )
+                                else:
+                                    Area = (
+                                        parameters[f"Area_{prefix}H{nH-1}"]
+                                        + parameters[f"Area_{prefix}H{nH}"]
+                                    )
 
-                            if Tname in table_final.columns:
-                                table_final[Tname] = (
-                                    table_final[Tname].iloc[-1]
-                                    + dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][
-                                        columnName
-                                    ]
-                                    * parameters[f"Area_{prefix}H{nH}"]
-                                ) / Area
-                            else:
-                                table_final[Tname] = (
-                                    dfT.loc[f'MeanTH_I={dict_df[target]["target"]}A'][
-                                        columnName
-                                    ]
-                                    * parameters[f"Area_{prefix}H{nH}"]
-                                )
+                                if Tname in table_final.columns:
+                                    table_final[Tname] = (
+                                        table_final[Tname].iloc[-1]
+                                        + dfT.loc[
+                                            f'Mean{symbol}_I={dict_df[target]["target"]}A'
+                                        ][columnName]
+                                        * parameters[f"Area_{prefix}H{nH}"]
+                                    ) / Area
+                                else:
+                                    table_final[Tname] = (
+                                        dfT.loc[
+                                            f'Mean{symbol}_I={dict_df[target]["target"]}A'
+                                        ][columnName]
+                                        * parameters[f"Area_{prefix}H{nH}"]
+                                    )
 
-                        elif not re.search(r"_?R\d+", columnName):
-                            table_final[f"{prefix}MeanTH_{columnName}[K]"] = dfT.loc[
-                                f'MeanTH_I={dict_df[target]["target"]}A'
-                            ][columnName]
+                            elif not re.search(r"_?R\d+", columnName):
+                                table_final[
+                                    f"{prefix}Mean{symbol}_{columnName}[{T_unit[key]}]"
+                                ] = dfT.loc[
+                                    f'Mean{symbol}_I={dict_df[target]["target"]}A'
+                                ][
+                                    columnName
+                                ]
 
         for columnName, columnData in table_final.items():
             if columnName.startswith(f"{prefix}Ucoil"):
                 table_final[
                     columnName.replace("Ucoil", "R").replace("[V]", "[ohm]")
                 ] = (columnData / dict_df[target]["target"])
+
+        if dict_df[target]["L"] != 0:
+            table_final[f"{prefix}L[H]"] = dict_df[target]["L"]
 
     if not global_df:
         outdir = f"U.measures"
@@ -516,7 +903,7 @@ def exportResults(
                 * df["Statistics_MagneticEnergy_integrate"].iloc[-1]
                 / (dict_df[target]["target"] ** 2)
             )
-        else:
+        elif sumLI2 != 0:
             table_final["M[H]"] = (
                 df["Statistics_MagneticEnergy_integrate"].iloc[-1] - sumLI2 / 2
             ) / productI
@@ -559,9 +946,9 @@ def main():
     with open(args.cfgfile, "r") as inputcfg:
         feelpp_config.read_string("[DEFAULT]\n[main]\n" + inputcfg.read())
         if "case" in feelpp_config:
-            dim = feelpp_config["case"]["dimension"]
+            dim = int(feelpp_config["case"]["dimension"])
         else:
-            dim = feelpp_config["main"]["case.dimension"]
+            dim = int(feelpp_config["main"]["case.dimension"])
         feelpp_directory = feelpp_config["main"]["directory"]
 
         basedir = os.path.dirname(args.cfgfile)
@@ -645,7 +1032,6 @@ def main():
 
     if e.isMasterRank():
         print("end of cli")
-    e.worldComm().barrier()
 
     return 0
 

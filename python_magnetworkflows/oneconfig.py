@@ -1,6 +1,7 @@
 """
 Run feelpp model for one config
 """
+
 from typing import List
 
 import os
@@ -40,12 +41,10 @@ def oneconfig(
     dict_df:
     e:
     """
+    comm = e.worldCommPtr()
 
     if e.isMasterRank():
         print("\n\nONECONFIG START", flush=True)
-
-    table_values = []
-    table_headers = []
 
     # pwd = os.getcwd()
     basedir = os.path.dirname(args.cfgfile)
@@ -53,33 +52,72 @@ def oneconfig(
         print(f"oneconfig: jsonmodel={jsonmodel}, basedir={basedir}", flush=True)
 
     dict_df = {}
-    for target, values in targets.items():
-        if e.isMasterRank():
-            print(f"{target}: {values['objectif']}")
-        table_values.append(float(values["objectif"]))
-        table_headers.append(f'{target}[{values["unit"]}]')
-        dict_df[target] = {
-            "PowerM": pd.DataFrame(),
-            "PowerH": pd.DataFrame(),
-            "Flux": pd.DataFrame(),
-            "HeatCoeff": pd.DataFrame(),
-            "DT": pd.DataFrame(),
-            "statsT": {
-                "MinT": pd.DataFrame(),
-                "MaxT": pd.DataFrame(),
-                "MeanT": pd.DataFrame(),
-            },
-            "statsTH": {
-                "MinTH": pd.DataFrame(),
-                "MaxTH": pd.DataFrame(),
-                "MeanTH": pd.DataFrame(),
-            },
-            "target": float(values["objectif"]),
-            "flow": 0,
-            "Tout": 0,
-            "Uw": pd.DataFrame(),
-            "L": float(values["inductance"]),
-        }
+    table_values = []
+    table_headers = []
+    e.worldComm().barrier()
+    if e.isMasterRank():
+        for target, values in targets.items():
+            print(f"{target}: {values['objectif']}", flush=True)
+            table_values.append(float(values["objectif"]))
+            table_headers.append(f'{target}[{values["unit"]}]')
+            dict_df[target] = {
+                "PowerM": pd.DataFrame(),
+                "PowerH": pd.DataFrame(),
+                "Flux": pd.DataFrame(),
+                "HeatCoeff": pd.DataFrame(),
+                "DT": pd.DataFrame(),
+                "statsT": {
+                    "MinT": pd.DataFrame(),
+                    "MaxT": pd.DataFrame(),
+                    "MeanT": pd.DataFrame(),
+                },
+                "statsTH": {
+                    "MinTH": pd.DataFrame(),
+                    "MaxTH": pd.DataFrame(),
+                    "MeanTH": pd.DataFrame(),
+                },
+                "target": float(values["objectif"]),
+                "flow": 0.0,
+                "Tout": 0.0,
+                "Uw": pd.DataFrame(),
+                "L": float(values["inductance"]),
+            }
+
+            if "thmagel" in args.cfgfile:
+                dict_df[target]["statsDispl"] = {
+                    "MinDispl": pd.DataFrame(),
+                    "MaxDispl": pd.DataFrame(),
+                    "MeanDispl": pd.DataFrame(),
+                }
+                dict_df[target]["statsStress"] = {
+                    "MinStress": pd.DataFrame(),
+                    "MaxStress": pd.DataFrame(),
+                    "MeanStress": pd.DataFrame(),
+                }
+                dict_df[target]["statsVonMises"] = {
+                    "MinVonMises": pd.DataFrame(),
+                    "MaxVonMises": pd.DataFrame(),
+                    "MeanVonMises": pd.DataFrame(),
+                }
+                dict_df[target]["statsDisplH"] = {
+                    "MinDisplH": pd.DataFrame(),
+                    "MaxDisplH": pd.DataFrame(),
+                    "MeanDisplH": pd.DataFrame(),
+                }
+                dict_df[target]["statsStressH"] = {
+                    "MinStressH": pd.DataFrame(),
+                    "MaxStressH": pd.DataFrame(),
+                    "MeanStressH": pd.DataFrame(),
+                }
+                dict_df[target]["statsVonMisesH"] = {
+                    "MinVonMisesH": pd.DataFrame(),
+                    "MaxVonMisesH": pd.DataFrame(),
+                    "MeanVonMisesH": pd.DataFrame(),
+                }
+
+    table_values = comm.localComm().bcast(table_values, root=0)
+    table_headers = comm.localComm().bcast(table_headers, root=0)
+    dict_df = comm.localComm().bcast(dict_df, root=0)
 
     # capture actual params per target:
     params = {}
@@ -91,6 +129,7 @@ def oneconfig(
             tmp = getparam(p[0], parameters, p[1], args.debug)
             params[key] += tmp
 
+    e.worldComm().barrier()
     (table, dict_df, e) = solve(
         fname,
         e,
@@ -122,12 +161,22 @@ def oneconfig(
                 if args.debug and e.isMasterRank():
                     print(df)
                 # df.to_markdown(tablefmt="psql") # requires pqndqs >= 1.0.0
-            if key in ["statsT", "statsTH"]:
+            if key in [
+                "statsT",
+                "statsTH",
+                "statsDispl",
+                "statsStress",
+                "statsDisplH",
+                "statsStressH",
+                "statsVonMises",
+                "statsVonMisesH",
+            ]:
                 for keyT, dfT in df.items():
                     dfT["I"] = f'{keyT}_I={dict_df[target]["target"]}A'
                     dfT.set_index("I", inplace=True)
 
     if e.isMasterRank():
         print("end of oneconfig")
+
     e.worldComm().barrier()
     return (table, dict_df, e)

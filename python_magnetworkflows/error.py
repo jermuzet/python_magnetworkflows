@@ -56,7 +56,7 @@ def compute_error(
     parameters: all jsonmodel parameters
     dict_df:
     """
-    if e.isMasterRank:
+    if e.isMasterRank():
         print(f"compute_error: it={it}, targets={targets},  ", flush=True)
 
     table_ = [it]
@@ -167,13 +167,31 @@ def compute_error(
         for key in ["statsT", "statsTH"]:
             for param in postvalues[target][key]:
                 name = param["name"]
-                if args.debug:
+                if args.debug and e.isMasterRank():
                     print(f"{target}: postvalues_params {name}", flush=True)
 
                 if "csv" in param:
                     dict_df[target][key][name] = getTarget(
                         {f"{name}": param}, name, e, args.debug
                     )
+        if "thmagel" in args.cfgfile:
+            for key in [
+                "statsDispl",
+                "statsStress",
+                "statsDisplH",
+                "statsStressH",
+                "statsVonMises",
+                "statsVonMisesH",
+            ]:
+                for param in postvalues[target][key]:
+                    name = param["name"]
+                    if args.debug and e.isMasterRank():
+                        print(f"{target}: postvalues_params {name}", flush=True)
+
+                    if "csv" in param:
+                        dict_df[target][key][name] = getTarget(
+                            {f"{name}": param}, name, e, args.debug
+                        )
 
         # perform natsort on dataframe and list
         for key, values_ in dict_df[target].items():
