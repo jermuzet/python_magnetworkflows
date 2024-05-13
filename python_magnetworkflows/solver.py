@@ -37,33 +37,36 @@ def create_field(
     if feelpp_env.isMasterRank():
         print(f"create_field: fields={fields}", flush=True)
 
+    params = []
     for target, values in targets.items():
-        params = []
         for p in values["control_params"]:
             tmp = getparam(p[0], parameters, p[1], debug)
             params += tmp
 
     # TODO: pass space and order in method params
     for field, data in fields.items():
-        if feelpp_env.isMasterRank():
-            print(f"fields[{field}]={data}", flush=True)
-        Xh = fpp.functionSpace(
-            space=data["space"], mesh=feel_pb.mesh(), order=data["order"]
-        )
-        usave = Xh.element()
-
-        for param in params:
-            marker = param.replace(f"{field}_", "")
-            # check if marker exists in mesh, if not skip the next lines
-            value = parameters[param]
-            usave.on(
-                range=fpp.markedelements(feel_pb.mesh(), marker),
-                expr=fpp.expr(str(value)),
+        if field != "sigma" and field != "alpha":
+            if feelpp_env.isMasterRank():
+                print(f"fields[{field}]={data}", flush=True)
+            Xh = fpp.functionSpace(
+                space=data["space"], mesh=feel_pb.mesh(), order=data["order"]
             )
+            usave = Xh.element()
 
-        usave.save(wd, name=field)
-        if feelpp_env.isMasterRank():
-            print(f"create_field: {field} done (wd={wd})", flush=True)
+            for param in params:
+                if param.startswith(f"{field}_"):
+                    marker = param.replace(f"{field}_", "")
+                    # check if marker exists in mesh, if not skip the next lines
+                    value = parameters[param]
+                    # print(f"{param}={value}")
+                    usave.on(
+                        range=fpp.markedelements(feel_pb.mesh(), marker),
+                        expr=fpp.expr(str(value)),
+                    )
+
+            usave.save(wd, name=field)
+            if feelpp_env.isMasterRank():
+                print(f"create_field: {field} done (wd={wd})", flush=True)
 
 
 def init_field(e, jsonmodel: str, meshmodel: str, dimension: int):
@@ -76,7 +79,12 @@ def init_field(e, jsonmodel: str, meshmodel: str, dimension: int):
     with open(jsonmodel, "r") as file:
         data = json.load(file)
 
-    m2d = fpp.load(fpp.mesh(dim=dimension), name=meshmodel, verbose=1)
+    if dimension == 3:
+        m2d = fpp.load(
+            fpp.mesh(dim=dimension, realdim=dimension), name=meshmodel, verbose=1
+        )
+    else:
+        m2d = fpp.load(fpp.mesh(dim=dimension), name=meshmodel, verbose=1)
 
     fnames = {}
     # cfpdes: from data["Models"]
@@ -94,9 +102,11 @@ def init_field(e, jsonmodel: str, meshmodel: str, dimension: int):
 
                     for param in data["Parameters"]:
                         if param.startswith(f"{field}_"):
+                            marker = param.replace(f"{field}_", "")
                             value = data["Parameters"][param]
+                            # print(f"{param}={value}")
                             usave.on(
-                                range=fpp.markedelements(m2d, param[2:]),
+                                range=fpp.markedelements(m2d, marker),
                                 expr=fpp.expr(str(value)),
                             )
 
@@ -293,8 +303,8 @@ def solve(
                 jsonfile.write(json.dumps(dict_json, indent=4))
 
             shutil.copy2(f"{basedir}/U.h5", f"{basedir}/U-it{it}-{post[:-1]}.h5")
-            # print(f"start calc for it={it}", flush=True)
-            if args.debug:
+            print(f"start calc for it={it}", flush=True)
+            if "Z" not in args.cooling and args.debug and e.isMasterRank():
                 print("Parameters:", f.modelProperties().parameters())
         e.worldComm().barrier()
 
@@ -326,6 +336,11 @@ def solve(
                 parameters,
                 dict_df,
             )
+        else:
+            dict_df = None
+            parameters = None
+            p_params = None
+            res = None
 
         # now broadcast: (err_max,..,table_), dict_df, parameters, p_params
         comm = e.worldCommPtr()
@@ -351,11 +366,14 @@ def solve(
         # make f.addParameterInModelProperties()
         if e.isMasterRank():
             print("update params", flush=True)
-        for param in params[target]:
-            print(
-                f"f.addParameterInModelProperties({param}, {parameters[param]}), rank={comm.localRank()}"
-            )
-            f.addParameterInModelProperties(param, parameters[param])
+
+        for target in targets:
+            for param in params[target]:
+                if args.debug and e.isMasterRank():
+                    print(
+                        f"f.addParameterInModelProperties({param}, {parameters[param]}), rank={comm.localRank()}"
+                    )
+                f.addParameterInModelProperties(param, parameters[param])
 
         selected_params = ["hw", "dTw"]
         if "H" in args.cooling:
@@ -375,14 +393,16 @@ def solve(
                 # )
                 if isinstance(values, list):
                     for val in values:
-                        print(
-                            f"f.addParameterInModelProperties({val}, {parameters[val]}, rank={comm.localRank()}, list"
-                        )
+                        if args.debug and e.isMasterRank():
+                            print(
+                                f"f.addParameterInModelProperties({val}, {parameters[val]}, rank={comm.localRank()}, list"
+                            )
                         f.addParameterInModelProperties(val, parameters[val])
                 else:
-                    print(
-                        f"f.addParameterInModelProperties({values}, {parameters[values]}, rank={comm.localRank()}"
-                    )
+                    if args.debug and e.isMasterRank():
+                        print(
+                            f"f.addParameterInModelProperties({values}, {parameters[values]}, rank={comm.localRank()}"
+                        )
                     f.addParameterInModelProperties(values, parameters[values])
 
         # update Parameters
@@ -403,7 +423,8 @@ def solve(
             if e.isMasterRank():
                 print("reload cfg", flush=True)
             e.setConfigFile(args.cfgfile)
-            f = cfpdes.cfpdes(dim=2)
+            dimension = f.mesh().dimension()
+            f = cfpdes.cfpdes(dim=dimension)
             f.init()
 
         it += 1
@@ -431,7 +452,7 @@ def solve(
             print(f"remove {tmp_jsonmodel}", flush=True)
             os.remove(tmp_jsonmodel)
         if "Z" in args.cooling:
-            for i in range(1, it):
+            for i in range(it):
                 for file in csvfiles:
                     _file = file.replace("$cfgdir", basedir)
                     print(f"remove {_file}-it{i}-{post[:-1]}.csv", flush=True)

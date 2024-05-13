@@ -101,9 +101,12 @@ def compute_error(
         )
 
         for param in params[target]:
-            marker = param.replace(
-                "U_", ""
-            )  # get name from values['control_params'] / change control_params to a list of dict?
+            if f.mesh().dimension() == 3:
+                marker = "V1"
+            else:
+                marker = param.replace(
+                    "U_", ""
+                )  # get name from values['control_params'] / change control_params to a list of dict?
             val = filtered_df[marker].iloc[-1]
             ovalue = parameters[param]
             table_.append(ovalue)
