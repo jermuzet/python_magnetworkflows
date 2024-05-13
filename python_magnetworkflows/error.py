@@ -79,6 +79,7 @@ def compute_error(
         filtered_df = getTarget(targets, target, e, args.debug)
 
         relax = float(values["relax"])
+        fuzzy = float(values["fuzzy"])
 
         # TODO: add stats for filtered_df to table_: mean, ecart type, min/max??
 
@@ -441,6 +442,7 @@ def compute_error(
                                 dPressure,
                                 model=args.heatcorrelation,
                                 friction=args.friction,
+                                fuzzy=fuzzy,
                             )
                             if e.isMasterRank():
                                 print(
@@ -457,6 +459,7 @@ def compute_error(
                         dPressure,
                         model=args.heatcorrelation,
                         friction=args.friction,
+                        fuzzy=fuzzy,
                     )
 
                     tmp_U, cf = Uw(
@@ -573,6 +576,7 @@ def compute_error(
                     dPressure,
                     model=args.heatcorrelation,
                     friction=args.friction,
+                    fuzzy=fuzzy,
                 )
                 # f.addParameterInModelProperties(p_params["dTw"][i], dTg)
                 # f.addParameterInModelProperties(p_params["hw"][i], hg)

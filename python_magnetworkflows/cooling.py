@@ -1,6 +1,7 @@
 """
 Cooling Models
 """
+
 from typing import List
 from math import exp, log, log10, sqrt
 
@@ -71,7 +72,14 @@ def k(Tw: float, P: float) -> float:
 
 
 def Montgomery(
-    Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float, friction: str
+    Tw: float,
+    Pw: float,
+    dPw: float,
+    U: float,
+    Dh: float,
+    L: float,
+    friction: str,
+    fuzzy: float = 1.0,
 ) -> float:
     """
     compute heat exchange coefficient in ??
@@ -85,7 +93,7 @@ def Montgomery(
     HMFL introduce an additional fuzzy factor
     """
 
-    fuzzy = 1.7
+    # fuzzy = 1.7
     h = (
         fuzzy
         * 1426.404
@@ -98,7 +106,14 @@ def Montgomery(
 
 
 def Dittus(
-    Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float, friction: str
+    Tw: float,
+    Pw: float,
+    dPw: float,
+    U: float,
+    Dh: float,
+    L: float,
+    friction: str,
+    fuzzy: str = 1.0,
 ) -> float:
     params = (0.023, 0.8, 0.4)
     h = hcorrelation(params, Tw, Pw, dPw, U, Dh, L, friction, "Dittus")
@@ -106,7 +121,14 @@ def Dittus(
 
 
 def Colburn(
-    Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float, friction: str
+    Tw: float,
+    Pw: float,
+    dPw: float,
+    U: float,
+    Dh: float,
+    L: float,
+    friction: str,
+    fuzzy: str = 1.0,
 ) -> float:
     params = (0.023, 0.8, 0.3)
     h = hcorrelation(params, Tw, Pw, dPw, U, Dh, L, friction, "Colburn")
@@ -114,7 +136,14 @@ def Colburn(
 
 
 def Silverberg(
-    Tw: float, Pw: float, dPw: float, U: float, Dh: float, L: float, friction: str
+    Tw: float,
+    Pw: float,
+    dPw: float,
+    U: float,
+    Dh: float,
+    L: float,
+    friction: str,
+    fuzzy: str = 1.0,
 ) -> float:
     params = (0.015, 0.85, 0.3)
     h = hcorrelation(params, Tw, Pw, dPw, U, Dh, L, friction, "Silverberg")
@@ -353,6 +382,7 @@ def getHeatCoeff(
     dPw: float,
     model: str = "Montgomery",
     friction: str = "Constant",
+    fuzzy: float = 1.0,
 ):
     correlation = {
         "Montgomery": Montgomery,
@@ -361,7 +391,7 @@ def getHeatCoeff(
         "Silverberg": Silverberg,
     }
 
-    return correlation[model](Tw, Pw, dPw, U, Dh, L, friction)
+    return correlation[model](Tw, Pw, dPw, U, Dh, L, friction, fuzzy)
 
 
 def getTout(

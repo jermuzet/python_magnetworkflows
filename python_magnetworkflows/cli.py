@@ -677,6 +677,12 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
         if "inductance" in values:
             targets[f"{filter}I"]["inductance"] = values["inductance"]
 
+        targets[f"{filter}I"]["fuzzy"] = 1.0
+        if "fuzzy" in values:
+            targets[f"{filter}I"]["fuzzy"] = values["fuzzy"]
+        elif values["type"] == "bitter":
+            targets[f"{filter}I"]["fuzzy"] = 1.7
+
         postvalues[f"{filter}I"] = {
             "statsT": [MinT, MeanT, MaxT],
             "statsTH": [MinTH, MeanTH, MaxTH],
