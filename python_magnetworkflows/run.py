@@ -100,7 +100,7 @@ def main():
                     f.write(
                         f"perl -pi -e 's|directory=.*|directory={feelpp_directory[0]}/{feelpp_directory[1]}/{cooling}/{heatcorrelation}/{friction}|' {basedir}/{cooling}/{cfgfile};\n"
                     )
-                    commandline = f"mpirun -np {args.np} python -m python_magnetworkflows.{args.type} --mdata '{args.mdata}' {basedir}/{cooling}/{cfgfile} --reloadcfg --cooling {cooling} --heatcorrelation {heatcorrelation} --friction {friction} --itermax {args.itermax}"
+                    commandline = f"mpirun -np {args.np} -bind-to core python -m python_magnetworkflows.{args.type} --mdata '{args.mdata}' {basedir}/{cooling}/{cfgfile} --reloadcfg --cooling {cooling} --heatcorrelation {heatcorrelation} --friction {friction} --itermax {args.itermax}"
                     if args.debug:
                         commandline = commandline + " --debug "
                     f.write(
