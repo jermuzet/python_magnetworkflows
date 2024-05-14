@@ -16,6 +16,7 @@ Rules-Requires-Root: no
 Package: python3-magnetworkflows
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends},
+ python3-natsort,
  python3-pandas,
  python3-pint,
  python3-tabulate,
