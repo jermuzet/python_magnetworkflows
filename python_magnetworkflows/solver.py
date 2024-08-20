@@ -3,16 +3,18 @@ from typing import Optional
 import re
 import os
 import shutil
-import copy
+import numpy as np
 
 import json
 from tabulate import tabulate
 
-import feelpp as fpp
-import feelpp.toolboxes.core as tb
+import feelpp.core as fppc
+import feelpp.toolboxes as fppt
+import feelpp.toolboxes.core as fpptb
 import feelpp.toolboxes.cfpdes as cfpdes
 
 import pandas as pd
+import gc
 
 from .params import getTarget, getparam
 from .waterflow import waterflow as w
@@ -48,7 +50,7 @@ def create_field(
         if field != "sigma" and field != "alpha":
             if feelpp_env.isMasterRank():
                 print(f"fields[{field}]={data}", flush=True)
-            Xh = fpp.functionSpace(
+            Xh = fppc.functionSpace(
                 space=data["space"], mesh=feel_pb.mesh(), order=data["order"]
             )
             usave = Xh.element()
@@ -60,8 +62,8 @@ def create_field(
                     value = parameters[param]
                     # print(f"{param}={value}")
                     usave.on(
-                        range=fpp.markedelements(feel_pb.mesh(), marker),
-                        expr=fpp.expr(str(value)),
+                        range=fppc.markedelements(feel_pb.mesh(), marker),
+                        expr=fppc.expr(str(value)),
                     )
 
             usave.save(wd, name=field)
@@ -73,18 +75,18 @@ def init_field(e, jsonmodel: str, meshmodel: str, dimension: int):
     """
     create and save a field in h5"""
     if e.isMasterRank():
-        print(f"init_field: jsonmodel={jsonmodel}, meshmodel={meshmodel}")
+        print(f"init_field: jsonmodel={jsonmodel}, meshmodel={meshmodel}", flush=True)
 
     basedir = os.path.dirname(jsonmodel)
     with open(jsonmodel, "r") as file:
         data = json.load(file)
 
     if dimension == 3:
-        m2d = fpp.load(
-            fpp.mesh(dim=dimension, realdim=dimension), name=meshmodel, verbose=1
+        m2d = fppc.load(
+            fppc.mesh(dim=dimension, realdim=dimension), name=meshmodel, verbose=1
         )
     else:
-        m2d = fpp.load(fpp.mesh(dim=dimension), name=meshmodel, verbose=1)
+        m2d = fppc.load(fppc.mesh(dim=dimension), name=meshmodel, verbose=1)
 
     fnames = {}
     # cfpdes: from data["Models"]
@@ -95,7 +97,7 @@ def init_field(e, jsonmodel: str, meshmodel: str, dimension: int):
                     basis = value["basis"]
                     # split basis into Space + order:
                     split = re.split(r"(\d+)", basis)
-                    Xh = fpp.functionSpace(
+                    Xh = fppc.functionSpace(
                         space=split[0], mesh=m2d, order=int(split[1])
                     )
                     usave = Xh.element()
@@ -106,8 +108,8 @@ def init_field(e, jsonmodel: str, meshmodel: str, dimension: int):
                             value = data["Parameters"][param]
                             # print(f"{param}={value}")
                             usave.on(
-                                range=fpp.markedelements(m2d, marker),
-                                expr=fpp.expr(str(value)),
+                                range=fppc.markedelements(m2d, marker),
+                                expr=fppc.expr(str(value)),
                             )
 
                     usave.save(basedir, name=field)
@@ -159,10 +161,10 @@ def init(
 
     # pwd = os.getcwd()
     if not e:
-        e = fpp.Environment(
+        e = fppc.Environment(
             [f"{fname}.py"],
-            opts=tb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
-            config=fpp.localRepository(directory),
+            opts=fpptb.toolboxes_options("coefficient-form-pdes", "cfpdes"),
+            config=fppc.localRepository(directory),
         )
         if e.isMasterRank():
             print(
@@ -185,7 +187,6 @@ def init(
     if e.isMasterRank():
         print("Init problem done", flush=True)
     # f.printAndSaveInfo()
-
     return (e, f, fields)
 
 
@@ -215,15 +216,6 @@ def solve(
         post += f'{target}={values["objectif"]}{values["unit"]}-'
 
     basedir = os.path.dirname(jsonmodel)  # get absolute path instead??
-
-    """
-    if e is None:
-        (e, f, fields) = init(
-            fname, e, args, "", jsonmodel, meshmodel, directory=feelpp_directory
-        )
-        if e.isMasterRank():
-            print("solve: load cfg", flush=True)
-    """
 
     if e.isMasterRank():
         print(f"solve: jsonmodel={jsonmodel}, basedir={basedir}", flush=True)
@@ -271,7 +263,7 @@ def solve(
         headers.append(f"err_max[{target}]")
     headers.append(f"err_max")
 
-    # Xh = fpp.functionSpace(space="Pch", mesh=f.mesh(), order=1)
+    # Xh = fppc.functionSpace(space="Pch", mesh=f.mesh(), order=1)
     # usave = Xh.element()
 
     while it < args.itermax:
