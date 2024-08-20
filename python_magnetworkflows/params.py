@@ -10,56 +10,53 @@ control_params from parameters section,
 value: name of the method to compute name
 """
 
-from typing import List, Union, Optional, Type
-
-import os
-
-import json
 import pandas as pd
 
 
-def getTarget(targetdefs: dict, name: str, e, debug: bool = False) -> pd.DataFrame:
-    # print(f"getTarget: workingdir={ os.getcwd() } name={name}")
+def getTarget(
+    targetdefs: dict, name: str, csv: pd.DataFrame, debug: bool = False
+) -> pd.DataFrame:
+    # print(f"getTarget: workingdir={ os.getcwd() } name={name}", flush=True)
 
     defs = targetdefs[name]
+
     if debug:
-        print(f"defs: {defs}")
-        print(f"csv: {defs['csv']}")
-        print(f"rematch: {defs['rematch']}")
+        print(f"getTarget:{defs['rematch']} name={name}", flush=True)
+        print(f"defs: {defs}", flush=True)
+        print(f"csv path: {defs['csv']}", flush=True)
+        print(f"rematch: {defs['rematch']}", flush=True)
 
-    filename = defs["csv"]
-    try:
-        with open(filename, "r") as f:
-            if debug:
-                print(f"csv: {f.name}")
-            filtered_df = post(f.name, defs["rematch"], debug)
+    if debug:
+        # print(f"csv={csv}", flush=True)
+        for key in csv.columns.values.tolist():
+            print(key, flush=True)
 
-        # rename columns
-        dict_columns = {}
-        for col in filtered_df.columns:
-            cname = col.replace(f'{defs["post"]["type"]}_', "")
-            cname = cname.replace(f'_{defs["post"]["math"]}', "")
-            dict_columns[col] = cname
-        filtered_df.rename(columns=dict_columns, inplace=True)
+    _filtered_df = csv.filter(regex=(defs["rematch"]))
 
-    except:
-        return pd.DataFrame()
+    # rename columns
+    dict_columns = {}
+    for col in _filtered_df.columns:
+        cname = col.replace(f'{defs["post"]["type"]}_', "")
+        cname = cname.replace(f'_{defs["post"]["math"]}', "")
+        dict_columns[col] = cname
+    df = _filtered_df.copy(deep=True).rename(columns=dict_columns)
 
-    if debug and e.isMasterRank():
-        print(filtered_df)
-        for key in filtered_df.columns.values.tolist():
-            print(key)
+    if debug:
+        for key in df.columns.values.tolist():
+            print(key, flush=True)
 
-    return filtered_df
+    del dict_columns
+    del defs
+    del _filtered_df
+
+    return df
 
 
 def getparam(param: str, parameters: dict, rmatch: str, debug: bool = False) -> list:
     """ """
-    if debug:
-        print(f"getparam: {param} ====== Start")
-
+    # if debug:
+    #     print(f"getparam: {param} ====== Start", flush=True)
     # print(f'getparams: param={param}, rmatch={rmatch}, parameters={parameters}')
-    n = 0
     val = []
 
     import re
@@ -70,41 +67,10 @@ def getparam(param: str, parameters: dict, rmatch: str, debug: bool = False) -> 
             # marker = p.split(param + "_")[-1]
             if debug:
                 # print(f"match {p}: {marker}")
-                print(f"{p}: {parameters[p]}")
+                print(f"getparam {p}: {parameters[p]}", flush=True)
             val.append(p)
 
     if debug:
-        print(f"val: {val}")
-        print(f"getparam: {param} ====== Done")
+        print(f"getparam val: {val}", flush=True)
+        # print(f"getparam: {param} ====== Done", flush=True)
     return val
-
-
-def post(csv: str, rmatch: str, debug: bool = False):
-    """
-    extract data for csv result files
-
-    eg:
-    rmatch= "Intensity_\\w+_integrate"
-    csv = ["cfpdes.heat.measures.csv", "cfpdes.magnetic.measures.csv"]
-    """
-    if debug:
-        print(f"post: workingdir={ os.getcwd() }")
-        print(f"post: csv={csv}")
-
-    # Retreive current intensities
-    df = pd.DataFrame()
-    if debug:
-        print("post: loading {csv_}")
-    with open(csv, "r") as f:
-        _df = pd.read_csv(f, sep=",", engine="python")
-        if debug:
-            for key in _df.columns.values.tolist():
-                print(key)
-
-        tmp_df = _df.filter(regex=(rmatch))
-        if debug:
-            print(f"tmp_df: {tmp_df}")
-
-        df = pd.concat([df, tmp_df], axis="columns")
-
-    return df
