@@ -29,7 +29,7 @@ def main():
         nargs="+",
         metavar="coolings",
         type=str,
-        choices=["mean", "meanH", "grad", "gradH", "gradHZ"],
+        choices=["mean", "meanH", "grad", "gradH", "gradHZ", "gradHZH"],
         default=["mean", "meanH", "grad", "gradH", "gradHZ"],
     )
     parser.add_argument(
@@ -79,7 +79,7 @@ def main():
             print("cfgfile=", cfgfile)
             print("meshmodel=", meshmodel)
 
-    with open(f"{basedir}/run_{args.type}_matrix.sh", "w") as f:
+    with open(f"{basedir}/run_{args.type}.sh", "w") as f:
         for cooling in args.coolings:
             f.write(f"# Cooling={cooling}\n")
             f.write(
@@ -100,16 +100,18 @@ def main():
                     f.write(
                         f"perl -pi -e 's|directory=.*|directory={feelpp_directory[0]}/{feelpp_directory[1]}/{cooling}/{heatcorrelation}/{friction}|' {basedir}/{cooling}/{cfgfile};\n"
                     )
-                    commandline = f"mpirun -np {args.np} -bind-to core python -m python_magnetworkflows.{args.type} --mdata '{args.mdata}' {basedir}/{cooling}/{cfgfile} --reloadcfg --cooling {cooling} --heatcorrelation {heatcorrelation} --friction {friction} --itermax {args.itermax}"
+                    cool = cooling
+                    if cool == "gradHZH":
+                        cool = "gradHZ"
+                    commandline = f"mpiexec -n {args.np} -bind-to core python -m python_magnetworkflows.{args.type} --mdata '{args.mdata}' {basedir}/{cooling}/{cfgfile} --reloadcfg --cooling {cool} --heatcorrelation {heatcorrelation} --friction {friction} --itermax {args.itermax}"
                     if args.debug:
                         commandline = commandline + " --debug "
                     f.write(
-                        f"{commandline} > {basedir}/{cooling}/{cooling}_{heatcorrelation}_{friction}.log 2>&1;\n\n"
+                        f"{commandline} > {basedir}/{cooling}/{args.type}_{cooling}_{heatcorrelation}_{friction}.log 2>&1;\n\n"
                     )
 
-    os.system(f"sh {basedir}/run_{args.type}_matrix.sh")
-    if not args.debug:
-        os.remove(f"{basedir}/run_{args.type}_matrix.sh")
+    os.system(f"sh {basedir}/run_{args.type}.sh")
+    os.remove(f"{basedir}/run_{args.type}.sh")
 
     return 0
 
