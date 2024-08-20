@@ -4,15 +4,11 @@ Run feelpp model
 
 import sys
 import os
-import argparse
 import configparser
+import gc
 
 import pandas as pd
 import json
-import re
-
-from .waterflow import waterflow
-from .cooling import getDT, getHeatCoeff
 
 from .oneconfig import oneconfig
 from .solver import init
@@ -82,12 +78,12 @@ def main():
 
     if args.debug and e.isMasterRank():
         print(args)
-        print(f"cwd: {pwd}")
-        print(f"feelpp_directory={feelpp_directory}")
-        print(f"dim={dim}")
-        print(f"basedir={basedir}")
-        print(f"jsonmodel={jsonmodel}")
-        print(f"meshmodel={meshmodel}")
+        print(f"cwd: {pwd}", flush=True)
+        print(f"feelpp_directory={feelpp_directory}", flush=True)
+        print(f"dim={dim}", flush=True)
+        print(f"basedir={basedir}", flush=True)
+        print(f"jsonmodel={jsonmodel}", flush=True)
+        print(f"meshmodel={meshmodel}", flush=True)
 
     Commissioning = True
     commissioning_df = pd.DataFrame()
@@ -148,6 +144,7 @@ def main():
 
     nstep = 0
     while Commissioning:
+        e.worldComm().barrier()
         (table, dict_df, e) = oneconfig(
             fname,
             e,
@@ -161,12 +158,15 @@ def main():
             postvalues,
             parameters,
         )
+        if args.debug:
+            print(f"oneconfig done, rank={e.worldCommPtr().localRank()}", flush=True)
 
         post = ""
         for value in I:
             post += f"I={value}A-"
 
         if e.isMasterRank():
+            print("Export results", flush=True)
             outdir = f"U_{post[:-1]}.measures"
             os.makedirs(outdir, exist_ok=True)
             table.to_csv(f"{outdir}/values.csv", index=False)
@@ -177,7 +177,6 @@ def main():
             global_df["MSite"]["U"] = pd.concat(
                 [global_df["MSite"]["U"], table.iloc[-1:]]
             )
-
             table_final = pd.DataFrame([f"{I}"], columns=["measures"])
             table_final, global_df = exportResults(
                 args,
@@ -193,6 +192,10 @@ def main():
                 commissioning_df = table_final.copy()
             else:
                 commissioning_df = pd.concat([commissioning_df, table_final])
+
+            del dict_df
+            del table
+            del table_final
 
         nstep += 1
         for i, (mname, values) in enumerate(args.mdata.items()):
@@ -213,6 +216,8 @@ def main():
                     Commissioning = False
 
         if Commissioning:
+            del f
+            gc.collect()
             (e, f, fields) = init(
                 fname,
                 e,
@@ -223,6 +228,8 @@ def main():
                 directory=feelpp_directory,
                 dimension=dim,
             )
+
+        e.worldComm().barrier()
 
     if e.isMasterRank():
         for target, values in global_df.items():
@@ -237,6 +244,9 @@ def main():
                     df_T.to_csv(f"{outdir}/values.csv", index=True)
 
         commissioning_df.to_csv(f"measures.csv", index=False)
+
+    if args.debug:
+        print(f"end of commissioning, rank={e.worldCommPtr().localRank()}", flush=True)
 
     return 0
 
