@@ -15,6 +15,7 @@ from warnings import simplefilter
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 from natsort import natsorted
+from tabulate import tabulate
 
 from .waterflow import waterflow
 from .cooling import getDT, getHeatCoeff
@@ -678,8 +679,8 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
             targets[f"{filter}I"]["inductance"] = values["inductance"]
 
         targets[f"{filter}I"]["fuzzy"] = 1.0
-        if "fuzzy" in values:
-            targets[f"{filter}I"]["fuzzy"] = values["fuzzy"]
+        if "heatCorrelationFuzzyFactor" in values:
+            targets[f"{filter}I"]["fuzzy"] = values["heatCorrelationFuzzyFactor"]
         elif values["type"] == "bitter":
             targets[f"{filter}I"]["fuzzy"] = 1.7
 
@@ -688,7 +689,11 @@ def loadMdata(e, pwd: str, args, targets: dict, postvalues: dict):
             "statsTH": [MinTH, MeanTH, MaxTH],
         }
         if "thmagel" in args.cfgfile:
-            postvalues[f"{filter}I"]["statsDispl"] = [MinDispl, MaxDispl]
+            postvalues[f"{filter}I"]["statsDispl"] = [
+                MinDispl,
+                # MeanDispl,
+                MaxDispl,
+            ]
             postvalues[f"{filter}I"]["statsStress"] = [MinStress, MeanStress, MaxStress]
             postvalues[f"{filter}I"]["statsVonMises"] = [
                 MinVonMises,
@@ -723,6 +728,7 @@ def exportResults(
     global_df=None,
     suffix: str = None,
 ):
+    # Sum L*I², product I for Mutual
     sumLI2 = 0
     productI = 1
     for target, values in dict_df.items():
@@ -730,22 +736,28 @@ def exportResults(
         prefix = ""
         if mname:
             prefix = f"{mname}_"
-
         table_final[f"{prefix}I[A]"] = dict_df[target]["target"]
         table_final[f"{prefix}flow[l/s]"] = dict_df[target]["flow"] * 1e3
         table_final[f"{prefix}Tout[K]"] = dict_df[target]["Tout"]
+        Tout_site = dict_df[target].get("MSite_Tout")
 
         sumLI2 += dict_df[target]["L"] * dict_df[target]["target"] ** 2
         productI *= dict_df[target]["target"]
 
-        print("\n")
         for key, df in values.items():
+            if args.debug:
+                print(f"dict key={key}", flush=True)
             if isinstance(df, pd.DataFrame):
+                # df is dataframe -> set new index
+                df["I"] = f'I={dict_df[target]["target"]}A'
+                df.set_index("I", inplace=True)
                 df_T = df.T
+                if args.debug:
+                    print(tabulate(df_T, headers="keys"), flush=True)
                 df_T = df_T.reindex(index=natsorted(df_T.index))
-                if global_df:
+                if global_df:  # if commissioning, store in global_df
                     global_df[mname][key] = pd.concat([global_df[mname][key], df])
-                else:
+                else:  # if cli, df to csv
                     outdir = f"{prefix}{key}.measures"
                     os.makedirs(outdir, exist_ok=True)
                     df_T.to_csv(f"{outdir}/values.csv", index=True)
@@ -755,7 +767,8 @@ def exportResults(
                 elif key == "PowerH":
                     dfUcoil = df / dict_df[target]["target"]
                     for columnName, columnData in dfUcoil.items():
-                        if "H" in columnName:
+                        if "H" in columnName:  
+                            # if helix, calculate Ucoil 2 helices by 2 
                             nH = int(columnName.split("H", 1)[1])
 
                             Uname = f"{prefix}Ucoil_H{nH-1}H{nH}[V]"
@@ -772,34 +785,37 @@ def exportResults(
                                 columnData.iloc[-1]
                             )
 
-            if key in [
-                "statsT",
-                "statsTH",
-                "statsDispl",
-                "statsStress",
-                "statsDisplH",
-                "statsStressH",
-                "statsVonMises",
-                "statsVonMisesH",
-            ]:
-                list_dfT = [dfT for keyT, dfT in df.items()]
+            elif isinstance(df, dict):
+                # df is a dict of df, change index and concat them in a single dataframe
+                list_dfT = []
+                for _key, _df in df.items():
+                    if isinstance(_df, pd.DataFrame):
+                        _df["I"] = f'{_key}_I={dict_df[target]["target"]}A'
+                        _df.set_index("I", inplace=True)
+                        list_dfT.append(_df)
+                # list_dfT = [_df for keyT, _df in df.items() if isinstance(dfT, pd.DataFrame)]
+                if args.debug:
+                    print(f"keys={[keyT for keyT, dfT in df.items()]}", flush=True)
+                    for _dft in list_dfT:
+                        print(tabulate(_dft, headers="keys"), flush=True)
                 dfT = pd.concat(list_dfT, sort=True)
+                if args.debug:
+                    print(f"dfT.keys={dfT.keys()}", flush=True)
+                    print(f"dfT={dfT}", flush=True)
                 dfT_T = dfT.T
                 dfT_T = dfT_T.reindex(index=natsorted(dfT_T.index))
-                # in commisionning:
-                if global_df:
+                if args.debug:
+                    print(f"dfT_T.keys={dfT.keys()}", flush=True)
+                    print(f"dfT_T={dfT_T}", flush=True)
+                if global_df: # if commissioning, store in global_df
                     global_df[mname][key] = pd.concat([global_df[mname][key], dfT])
-                else:
+                else: # if cli, df to csv
                     outdir = f"{prefix}{key}.measures"
                     os.makedirs(outdir, exist_ok=True)
                     dfT_T.to_csv(f"{outdir}/values.csv", index=True)
 
-                if key in [
-                    "statsTH",
-                    "statsDisplH",
-                    "statsStressH",
-                    "statsVonMisesH",
-                ]:
+                if key.endswith("H"):
+                    # if TH, DisplH, StressH, VonMisesH: go also in table_final
                     symbol = key.replace("stats", "")
                     T_method = {
                         "Min": min,
@@ -812,8 +828,12 @@ def exportResults(
                         "statsVonMisesH": "Pa",
                     }
                     for columnName, columnData in dfT.items():
+                        if args.debug:
+                            print(f"columnName={columnName}", flush=True)
+                            print(f"columnData={columnData.keys()}", flush=True)
                         for T in ["Min", "Max"]:
                             if "H" in columnName:
+                                # if helices, calculate measures 2 helices by 2 
                                 nH = int(columnName.split("H", 1)[1])
 
                                 Tname = (
@@ -842,8 +862,9 @@ def exportResults(
                                 ][
                                     columnName
                                 ]
-                        if symbol != "DisplH":
+                        if symbol != "DisplH": #DisplH doesn't have mean <- fix !
                             if "H" in columnName:
+                                # if helices, calculate mean 2 helices by 2 with area values 
                                 nH = int(columnName.split("H", 1)[1])
 
                                 Tname = (
@@ -887,6 +908,7 @@ def exportResults(
                                 ]
 
         for columnName, columnData in table_final.items():
+            # Add R=Ucoil/I to table_final 
             if columnName.startswith(f"{prefix}Ucoil"):
                 table_final[
                     columnName.replace("Ucoil", "R").replace("[V]", "[ohm]")
@@ -900,16 +922,20 @@ def exportResults(
         os.makedirs(outdir, exist_ok=True)
         table.to_csv(f"{outdir}/values.csv", index=False)
 
+    if Tout_site:
+        table_final["MSite_Tout[K]"] = Tout_site
     if "mag" in args.cfgfile:
         df = pd.read_csv("magnetic.measures/values.csv")
         table_final["B0[T]"] = df["Points_B0_expr_Bz"].iloc[-1]
         if len(dict_df) == 1:
+            # if only one magnet calculate inductance
             table_final["L[H]"] = (
                 2
                 * df["Statistics_MagneticEnergy_integrate"].iloc[-1]
                 / (dict_df[target]["target"] ** 2)
             )
         elif sumLI2 != 0:
+            # if several magnets, calculate mutual
             table_final["M[H]"] = (
                 df["Statistics_MagneticEnergy_integrate"].iloc[-1] - sumLI2 / 2
             ) / productI
@@ -1027,17 +1053,18 @@ def main():
         postvalues,
         parameters,
     )
-    if e.isMasterRank():
-        print("oneconfig done")
+    if args.debug:
+        print(f"oneconfig done, rank={e.worldCommPtr().localRank()}", flush=True)
 
     if e.isMasterRank():
+        print("Export result", flush=True)
         table_final = pd.DataFrame(["values"], columns=["measures"])
         table_final, global_df = exportResults(
             args, parameters, table, table_final, dict_df
         )
 
-    if e.isMasterRank():
-        print("end of cli")
+    if args.debug:
+        print(f"end of cli, rank={e.worldCommPtr().localRank()}", flush=True)
 
     return 0
 
