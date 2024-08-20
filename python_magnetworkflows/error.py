@@ -2,12 +2,12 @@ import pandas as pd
 
 from .params import getTarget, getparam
 from .waterflow import waterflow as w
-from .cooling import rho, Cp, Uw, getDT, getHeatCoeff, getTout
+from .cooling import steam, Uw, getDT, getHeatCoeff, getTout
 
 import re
 from tabulate import tabulate
 
-import copy
+import gc
 
 
 # sort (ref https://stackoverflow.com/questions/29580978/naturally-sorting-pandas-dataframe)
@@ -71,7 +71,8 @@ def compute_error(
     Tw0 = None
     for target, values in targets.items():
         print(
-            f'dict_df[target]["target"]={dict_df[target]["target"]} (type={type(dict_df[target]["target"])})'
+            f'dict_df[target]["target"]={dict_df[target]["target"]} (type={type(dict_df[target]["target"])})',
+            flush=True,
         )
 
         objectif = -float(values["objectif"])
@@ -87,15 +88,13 @@ def compute_error(
         err_max_target = max(error.abs().max(axis=1))
         err_max = max(err_max_target, err_max)
 
+        print(f"{target}: objectif={objectif}", flush=True)
+        print(f"{target}: relax={relax}", flush=True)
+        print(f"{target}: fuzzy={fuzzy}", flush=True)
         if args.debug:
-            print(
-                f"filtered_df: {filtered_df.columns.values.tolist()}",
-                flush=True,
-            )
-            print(f"{target}: objectif={objectif}")
-            print(f"{target}: relax={relax}")
-            print(f"{target}: filtered_df={filtered_df}")
-            print(f"{target}: error={error}")
+            print(f"filtered_df: {filtered_df.columns.values.tolist()}", flush=True)
+            # print(f"{target}: filtered_df={filtered_df}", flush=True)
+            # print(f"{target}: error={error}", flush=True)
         print(
             f"{target}: it={it}, err_max={err_max_target:.3e}, eps={args.eps:.3e}, itmax={args.itermax}",
             flush=True,
@@ -113,7 +112,7 @@ def compute_error(
             table_.append(ovalue)
             nvalue = ovalue * objectif / val
             if args.debug:
-                print(f"param={param}, marker={marker}")
+                print(f"param={param}, marker={marker}", flush=True)
                 print(
                     f"{it}: {marker}, goal={objectif:.3f}, val={val:.3f}, err={error[marker].iloc[-1]:.3e}, ovalue={ovalue:.3f}, nvalue={nvalue:.3f}",
                     flush=True,
@@ -157,77 +156,58 @@ def compute_error(
                         else:
                             tmp = [t for t in tmp if not regex_match.fullmatch(t)]
                     tmp.sort()
-                    # print(f'{name}: sorted tmp={tmp}')
+                    # print(f'{name}: sorted tmp={tmp}', flush=True)
                     if pname in p_params:
                         p_params[pname] += tmp
                     else:
                         p_params[pname] = tmp
 
         if args.debug:
-            print(f"p_df: {dict_df[target].keys()}")
-            print(f"p_params: {p_params.keys()}")
+            print(f"p_df: {dict_df[target].keys()}", flush=True)
+            print(f"p_params: {p_params.keys()}", flush=True)
             print(f'p_params[Tw]={p_params["Tw"]}', flush=True)
 
-        for key in ["statsT", "statsTH"]:
+        # for key in ["statsT", "statsTH"]:
+        print(f"{target}: getTarget {postvalues[target].keys()}", flush=True)
+        for key in postvalues[target].keys():
             for param in postvalues[target][key]:
                 name = param["name"]
-                if args.debug and e.isMasterRank():
+                if args.debug:
                     print(f"{target}: postvalues_params {name}", flush=True)
 
                 if "csv" in param:
                     dict_df[target][key][name] = getTarget(
                         {f"{name}": param}, name, e, args.debug
                     )
-        if "thmagel" in args.cfgfile:
-            for key in [
-                "statsDispl",
-                "statsStress",
-                "statsDisplH",
-                "statsStressH",
-                "statsVonMises",
-                "statsVonMisesH",
-            ]:
-                for param in postvalues[target][key]:
-                    name = param["name"]
-                    if args.debug and e.isMasterRank():
-                        print(f"{target}: postvalues_params {name}", flush=True)
-
-                    if "csv" in param:
-                        dict_df[target][key][name] = getTarget(
-                            {f"{name}": param}, name, e, args.debug
-                        )
 
         # perform natsort on dataframe and list
+        print("Natsort on dataframe and list", flush=True)
         for key, values_ in dict_df[target].items():
             msg = f"dict_df[target]: key={key}, values={type(values_)}"
             if isinstance(values_, dict):
                 msg += " dict"
-                # print(f"dict_df[target][{key}]={values_}")
-                # sorted dict by keys??
             if isinstance(values_, list):
                 if values_:
                     msg += f", list={type(values_[0])}  sorted"
-                    # print(f"p_params[{key}]={values_}")
-                    # sorted list??
-                    dict_df[target][key] = natsortlist(values_)
+                    dict_df[target][key] = natsortlist(values_).copy(deep=True)
                 else:
                     msg += f", list=empty"
             if isinstance(values_, pd.core.frame.DataFrame):
                 msg += " dataframe sorted"
-                # sorted??
-                dict_df[target][key] = natsortdataframe(values_)
-            print(msg, flush=True)
+                dict_df[target][key] = natsortdataframe(values_).copy(deep=True)
+            if args.debug:
+                print(msg, flush=True)
 
         for key, values_ in p_params.items():
             msg = f"p_params: key={key}, values={type(values_)}"
             if isinstance(values_, list):
                 if values_:
                     msg += f", list={type(values_[0])} sorted"
-                    # print(f"p_params[{key}]={values_}")
                     p_params[key] = natsortlist(values_)
                 else:
                     msg += f", list=empty"
-            print(msg, flush=True)
+            if args.debug:
+                print(msg, flush=True)
 
         if args.debug:
             print(f"PowerM: {dict_df[target]['PowerM']}", flush=True)
@@ -238,17 +218,14 @@ def compute_error(
         SPower_H = dict_df[target]["PowerH"].iloc[-1].sum()
         SFlux_H = dict_df[target]["Flux"].iloc[-1].sum()
 
-        # print(f'Flux: {type(dict_df[target]["Flux"])}')
-        sortedflux = dict_df[target]["Flux"]
+        # print(f'Flux: {type(dict_df[target]["Flux"])}', flush=True)
+        sortedflux = dict_df[target]["Flux"].copy(deep=True)
         t_headers = ["Part", "Flux[MW]"]
         t_parts = sortedflux.columns.values.tolist()
         # t_power = sortedflux.iloc[-1]
         t_power = [f"{s/1.e+6:.3f}" for s in sortedflux.iloc[-1].tolist()]
-        # print(type(t_power.tolist()))
-        print(
-            tabulate(list(zip(t_parts, t_power)), headers=t_headers),
-            flush=True,
-        )
+        # print(type(t_power.tolist()), flush=True)
+        print(tabulate(list(zip(t_parts, t_power)), headers=t_headers), flush=True)
 
         Powers_Diff = abs(PowerM - SPower_H)
         PowerFlux_Diff = abs(PowerM - SFlux_H)
@@ -268,22 +245,21 @@ def compute_error(
         )
 
         if args.debug:
-            print("PowerM : ", dict_df[target]["PowerM"], flush=True)
-            print(f'{target}: PowerH {dict_df[target]["PowerH"]}', flush=True)
             for key in p_params:
                 print(f"{target}: {key}={p_params[key]}", flush=True)
 
-        if Powers_Diff / PowerM > 1.0e-3:
-            return f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM:.3f} SPower_H={SPower_H:.3f}"
-        if Powers_Diff / PowerM > 1.0e-3:
-            return f"Power!=SPower_H:{Powers_Diff/PowerM}    Power={PowerM:.3f} SPower_H={SPower_H:.3f}"
-        if PowerFlux_Diff / PowerM > 1.0e-3:
-            return f"Power!=SFlux_H:{PowerFlux_Diff/PowerM}    Power={PowerM:.3f} SFlux_H={SFlux_H:.3f}"
+        Ptol = 1e-2
+        if Powers_Diff / PowerM > Ptol:
+            return f"Power!=SPower_H:{100*Powers_Diff/PowerM:.3f}%  Power={PowerM:.3f} SPower_H={SPower_H:.3f}"
+        if PowerFlux_Diff / PowerM > Ptol:
+            return f"Power!=SFlux_H:{100*PowerFlux_Diff/PowerM:.3f}%   Power={PowerM:.3f} SFlux_H={SFlux_H:.3f}"
 
         # get dict_df[target]["Flux"] column names
         for i, cname in enumerate(sortedflux.columns.values.tolist()):
-            flux = dict_df[target]["Flux"][cname].iloc[-1]
-            print(f"{target} Channel{i} Flux[cname={cname}]: {flux:.3f}")
+            print(
+                f'{target} Channel{i} Flux[cname={cname}]: {dict_df[target]["Flux"][cname].iloc[-1]:.3f}',
+                flush=True,
+            )
 
         flow = values["waterflow"]
         Pressure = flow.pressure(abs(objectif))
@@ -296,7 +272,7 @@ def compute_error(
             for p in p_params["Dh"]:
                 print(f"Dh[{i}]: key={p}, value={parameters[p]}", flush=True)
                 i += 1
-            print(f'Dh: {p_params["Dh"]}')
+            print(f'Dh: {p_params["Dh"]}', flush=True)
 
         Umean = flow.umean(abs(objectif), sum(Sh))  # math.fsum(Sh)
         dT_global = getDT(
@@ -316,13 +292,14 @@ def compute_error(
         # per Channel/Slit
         if "H" in args.cooling:
             TwH = [parameters[p] for p in p_params["TwH"]]
-            for p in p_params["TwH"]:
-                print(f"TwH: parameters[{p}]={parameters[p]}")
-            # print(f'TwH: {TwH} ({len(TwH)}/{len(Dh)})')
             dTwH = [parameters[p] for p in p_params["dTwH"]]
-            # print(f"dTwH: {dTwH} ({len(dTwH)}/{len(Dh)})")
             hwH = [parameters[p] for p in p_params["hwH"]]
-            # print(f'hwH: {hwH} ({len(hwH)}/{len(Dh)})')
+            if args.debug:
+                for p in p_params["TwH"]:
+                    print(f"TwH: parameters[{p}]={parameters[p]}", flush=True)
+                # print(f'TwH: {TwH} ({len(TwH)}/{len(Dh)})', flush=True)
+                # print(f"dTwH: {dTwH} ({len(dTwH)}/{len(Dh)})", flush=True)
+                # print(f'hwH: {hwH} ({len(hwH)}/{len(Dh)})', flush=True)
             Lh = [
                 abs(parameters[p] - parameters[p.replace("max", "min")])
                 for p in p_params["ZmaxH"]
@@ -333,25 +310,22 @@ def compute_error(
 
                 # TODO verify if data are consistant??
                 # assert len(Dh) == len(TwH) == len(dTwH) == len(hwH)
-                print(f'{target} Flux: {dict_df[target]["Flux"]}')
 
             if not dTwH:
-                dTwH = [0] * len(Dh)
+                dTwH = [0.0] * len(Dh)
 
-            dTwi = [0] * len(Dh)
-            Ti = [0] * len(Dh)
-            hi = [0] * len(Dh)
-            VolMass = [0] * len(Dh)
-            SpecHeat = [0] * len(Dh)
-            Q = [0] * len(Dh)
-
-            dict_df[target]["cf"] = pd.DataFrame()
+            dTwi = [0.0] * len(Dh)
+            Ti = [0.0] * len(Dh)
+            hi = [0.0] * len(Dh)
+            VolMass = [0.0] * len(Dh)
+            SpecHeat = [0.0] * len(Dh)
+            Q = [0.0] * len(Dh)
 
             FluxZ = None
             if "Z" in args.cooling:
-                FluxZ = dict_df[target]["FluxZ"]
+                FluxZ = dict_df[target]["FluxZ"].copy(deep=True)
 
-            Tw0 = 0
+            Tw0 = 0.0
             if not isinstance(TwH[0], dict):
                 Tw0 = TwH[0]
 
@@ -363,10 +337,9 @@ def compute_error(
                 FluxCh_dz = []
                 Tw_z_old = []
                 hw_z_old = []
-                # hw_z_old = []
                 if FluxZ is not None:
                     csvfile = TwH[i]["filename"].replace("$cfgdir", basedir)
-                    Tw_data = pd.read_csv(csvfile, sep=",", engine="python")
+                    Tw_data = pd.read_csv(csvfile, sep=",")
                     Tw0 = Tw_data["Tw"].iloc[0]
                     Tw_z_old = Tw_data["Tw"].to_list()
                     if not "hw" in Tw_data:
@@ -388,12 +361,13 @@ def compute_error(
                         FluxZ.at[FluxZ.index[-1], f"FluxZ{i}_{cname}"]
                         for i in range(len(key_dz))
                     ]
-                    if abs(1 - sum(FluxCh_dz) / PowerCh) > 1e-3:
-                        return f"Sum(FluxZ)!=Flux[{cname}]: PowerCh={PowerCh} Flux_H={sum(FluxCh_dz)} (res={sum(FluxCh_dz) / PowerCh})"
+                    htol = 1e-3
+                    if abs(1 - sum(FluxCh_dz) / PowerCh) > htol:
+                        return f"Sum(FluxZ)!=Flux[{cname}]:{abs(1 - sum(FluxCh_dz) / PowerCh)}>{htol}; PowerCh={PowerCh} Flux_H={sum(FluxCh_dz)}"
 
                 U = Umean
                 tmp_dTwi = dTwH[i]
-                tmp_hi_old = 0
+                tmp_hi_old = 0.0
                 if isinstance(hwH[i], dict):
                     tmp_hi_old = hw_z_old[0]
                 else:
@@ -406,7 +380,7 @@ def compute_error(
                 Tw_z = Tw_z_old
                 hw_z = hw_z_old
                 tmp_hi = tmp_hi_old
-                tmp_Twh = 0
+                tmp_Twh = 0.0
                 if isinstance(TwH[i], dict):
                     tmp_Twh = Tw_z[0]
                 else:
@@ -444,7 +418,7 @@ def compute_error(
                                 friction=args.friction,
                                 fuzzy=fuzzy,
                             )
-                            if e.isMasterRank():
+                            if args.debug:
                                 print(
                                     f"Tw_z[{k}]={Tw_z[k]}, _h={hw_z[k]}, Pw={Pw}, Pressure={Pressure}, dP={dPressure}",
                                     flush=True,
@@ -461,20 +435,20 @@ def compute_error(
                         friction=args.friction,
                         fuzzy=fuzzy,
                     )
-
+                    Steam = steam(tmp_Twh + tmp_dTwi / 2.0, Pressure)
                     tmp_U, cf = Uw(
-                        tmp_Twh + tmp_dTwi / 2.0,
-                        Pressure,
+                        Steam,
                         dPressure,
                         d,
                         Lh[i],
                         friction=args.friction,
                         uguess=U,
                     )
+                    del Steam
                     n_tmp_flow = tmp_U * s
                     if args.debug:
                         print(
-                            f"tmp_flow={tmp_flow:.6e}, n_tmp_flow={n_tmp_flow:.6e}, U={U:.3f}, tmp_U={tmp_U:.3f}, dTwH[{i}]={tmp_Twh:.3f}, tmp_dTwi={tmp_dTwi:.3f}",
+                            f"tmp_flow={tmp_flow:.6e}, n_tmp_flow={n_tmp_flow:.6e}, U={U:.3f}, tmp_U={tmp_U:.3f}, TwH[{i}]={tmp_Twh:.3f}, tmp_dTwi={tmp_dTwi:.3f}",
                             flush=True,
                         )
                     U = tmp_U
@@ -500,12 +474,16 @@ def compute_error(
 
                 # f.addParameterInModelProperties(p_params["dTwH"][i], dTwi[i])
                 # f.addParameterInModelProperties(p_params["hwH"][i], hi[i])
-                print(
-                    f'parameters[p_params["hwH"][{i}]={p_params["hwH"][i]}]: {parameters[p_params["hwH"][i]]}'
-                )
-                parameters[p_params["hwH"][i]] = hi[i]
+                if args.debug:
+                    print(
+                        f'parameters[p_params["hwH"][{i}]={p_params["hwH"][i]}]: {parameters[p_params["hwH"][i]]}',
+                        flush=True,
+                    )
+                # parameters[p_params["hwH"][i]] = hi[i]
                 if FluxZ is None:
                     parameters[p_params["dTwH"][i]] = dTwi[i]
+                    parameters[p_params["hwH"][i]] = hi[i]
+                elif not isinstance(hwH[i], dict):
                     parameters[p_params["hwH"][i]] = hi[i]
                 dict_df[target]["HeatCoeff"]["hw_" + cname] = [round(hi[i], 3)]
                 dict_df[target]["DT"]["dTw_" + cname] = [round(dTwi[i], 3)]
@@ -513,35 +491,33 @@ def compute_error(
                 dict_df[target]["cf"]["cf_" + cname] = [cf]
 
                 error_dT.append(abs(1 - (dTwH[i] / dTwi[i])))
-                error_h.append(abs(1 - (tmp_hi_old / hi[i])))
+                if isinstance(hwH[i], dict):
+                    error_h.append(abs(1 - (tmp_hi_old / hw_z[0])))
+                else:
+                    error_h.append(abs(1 - (tmp_hi_old / hi[i])))
 
                 print(
                     f"{target} Cooling[{i}]: cname={cname}, u={U:.3f}, Dh={d:.3e}, Sh={s:.3e}, Q={Q[i]:.3f}, Power={PowerCh:.3f}, TwH={tmp_Twh:.3f}, dTwH={dTwH[i]:.3f}, hwH={tmp_hi_old:.3f}, dTwi={dTwi[i]:.3f}, hi={hi[i]:.3f}",
                     flush=True,
                 )
-                dict_df[target]["flow"] = sum(Q)
 
                 if FluxZ is not None:
                     csvfile = TwH[i]["filename"].replace("$cfgdir", basedir)
-                    if e.isMasterRank():
-                        # print(f"write {csvfile}")
-                        Tw_data.to_csv(csvfile, index=False)
-                e.worldComm().barrier()
+                    Tw_data.to_csv(csvfile, index=False)
+                Steam = steam(tmp_Twh + dTwi[i] / 2.0, Pressure)
+                VolMass[i] = Steam.rho
+                SpecHeat[i] = Steam.cp * 1.0e3
 
-                VolMass[i] = rho(tmp_Twh + dTwi[i] / 2.0, Pressure)
-                SpecHeat[i] = Cp(tmp_Twh + dTwi[i] / 2.0, Pressure)
-
+            dict_df[target]["flow"] = sum(Q)
             # TODO compute an estimate of dTg
             # Tout /= VolMass * SpecHeat * (Umean * sum(Sh))
             Tout = getTout(Ti, VolMass, SpecHeat, Q)
-            VolMassout = rho(Tout, Pressure)
-            SpecHeatout = Cp(Tout, Pressure)
-            Qout = Umean * sum(Sh)
 
+            Steam = steam(Tout, Pressure)
             List_Tout.append(Tout)
-            List_VolMassout.append(VolMassout)
-            List_SpecHeatout.append(SpecHeatout)
-            List_Qout.append(Qout)
+            List_VolMassout.append(Steam.rho)
+            List_SpecHeatout.append(Steam.cp * 1.0e3)
+            List_Qout.append(Umean * sum(Sh))
 
             dTg = Tout - Tw0
             print(
@@ -562,10 +538,7 @@ def compute_error(
 
             for i, T in enumerate(Tw):
                 if args.debug:
-                    print(
-                        f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}",
-                        flush=True,
-                    )
+                    print(f"T:{T} Tw:{Tw}  i:{i}  dTw:{dTw[i]}  hw:{hw[i]}", flush=True)
                 dTg = getDT(flow.flow(abs(objectif)), PowerM, Tw[i], Pressure)
                 hg = getHeatCoeff(
                     Dh[i],
@@ -599,22 +572,19 @@ def compute_error(
                 )
             dict_df[target]["Tout"] = Tw[0] + dTg
 
-            VolMassout = rho(Tw[0] + dTg, Pressure)
-            SpecHeatout = Cp(Tw[0] + dTg, Pressure)
-            Qout = flow.flow(abs(objectif))
-
+            Steam = steam(Tw[0] + dTg, Pressure)
             List_Tout.append(Tw[0] + dTg)
-            List_VolMassout.append(VolMassout)
-            List_SpecHeatout.append(SpecHeatout)
-            List_Qout.append(Qout)
+            List_VolMassout.append(Steam.rho)
+            List_SpecHeatout.append(Steam.cp * 1.0e3)
+            List_Qout.append(flow.flow(abs(objectif)))
 
         # TODO: how to transform dTg, hg et DTwi, hi en dataframe??
-
         err_max_dT = max(err_max_dT, max(error_dT))
         err_max_h = max(err_max_h, max(error_h))
 
     if len(List_Tout) > 1:
         Tout_site = getTout(List_Tout, List_VolMassout, List_SpecHeatout, List_Qout)
         print(f"MSITE Tout={Tout_site}", flush=True)
+        dict_df[target]["MSite_Tout"] = Tout_site
 
-    return (err_max, err_max_dT, err_max_h, table_, p_params)
+    return (err_max, err_max_dT, err_max_h, table_, p_params, parameters, dict_df)
